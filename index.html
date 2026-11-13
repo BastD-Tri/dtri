@@ -27,6 +27,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.45 var(--ui); }
 body { overscroll-behavior-y: contain; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -205,6 +206,33 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
 .p-metrics .m.ok b { color: var(--ok); }
 .p-metrics .m.tgt { box-shadow: inset 0 0 0 1.5px rgba(77,208,200,.55); }
 .durchips { margin-top: 2px; }
+/* ---------- pédales de puissance : deux sources dans le lecteur ---------- */
+.p-srctag { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
+.p-srctag i { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--muted)); }
+.p-srctag span { color: var(--text); font-weight: 650; }
+#player.dual .p-power .big { font-size: clamp(80px, 29vw, 160px); }
+.p-src { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; text-align: left; }
+.p-src .src { background: var(--surface); border-radius: var(--r); padding: 8px 10px 9px; border: 1.5px solid transparent; }
+.p-src .src.ref { border-color: var(--c); }
+.p-src .src.lost { opacity: .55; }
+.p-src .src.lost .lr { grid-template-columns: 1fr; }
+.p-src .src.lost .lr .bar, .p-src .src.lost #src-p-r { display: none; }
+.p-src .hd { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; }
+.p-src .hd i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.p-src .hd em { margin-left: auto; font-style: normal; font-weight: 500; font-size: 11px; color: var(--c); }
+.p-src .vals { display: flex; align-items: baseline; gap: 3px; margin-top: 2px; }
+.p-src .vals b { font-family: var(--chrono); font-style: italic; font-weight: 800; font-size: 25px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.p-src .vals small { font-size: 11.5px; color: var(--muted); margin-right: 8px; }
+.p-src .ft { font-size: 11.5px; color: var(--muted); min-height: 16px; }
+.p-src .lr { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.p-src .lr .bar { height: 5px; border-radius: 3px; background: var(--surface2); overflow: hidden; position: relative; }
+.p-src .lr .bar span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); border-right: 2px solid var(--bg); transition: width .4s; }
+.p-src .lr .bar::after { content: ''; position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.legend i.dash { background: repeating-linear-gradient(90deg, #4dd0c8 0 3px, transparent 3px 5px); }
+table.srccmp td:first-child { color: var(--muted); }
+table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 .p-chart { min-height: 90px; position: relative; }
 .p-chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .p-controls { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 8px; margin-top: 10px; align-items: stretch; }
@@ -962,6 +990,21 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
     return best;
   }
 
+  // home trainer et pédales enregistrés ensemble : moyennes de chacun, écart, équilibre gauche/droite
+  function sourcesOf(seg) {
+    if (!seg.some(s => s.pp !== undefined)) return null;
+    const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+    const both = seg.filter(s => s.pp > 0 && s.pk > 0);
+    const sp = both.reduce((a, s) => a + s.pp, 0), sk = both.reduce((a, s) => a + s.pk, 0);
+    const bal = seg.map(s => s.bal).filter(v => v > 0);
+    return {
+      kickr: avg(seg.filter(s => s.pk !== undefined).map(s => s.pk)), pedals: avg(seg.filter(s => s.pp !== undefined).map(s => s.pp)),
+      gap: sk ? sp / sk - 1 : 0, n: both.length, bal: bal.length ? avg(bal) : null,
+      cadK: avg(seg.map(s => s.ck).filter(v => v > 0)), cadP: avg(seg.map(s => s.cp).filter(v => v > 0)),
+      cover: seg.length ? seg.filter(s => s.pp !== undefined).length / seg.length : 0
+    };
+  }
+
   function summarize(samples, ftp, extra) {
     extra = extra || {};
     const n = samples.length;
@@ -987,7 +1030,8 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
       avgSpeed: n ? dist / n : 0, // m/s
       maxSpeed: max(spd) / 3.6,
       calories: Math.round(kj * 1.0),
-      best: { s5: bestAverage(P, 5), m1: bestAverage(P, 60), m5: bestAverage(P, 300), m20: bestAverage(P, 1200) }
+      best: { s5: bestAverage(P, 5), m1: bestAverage(P, 60), m5: bestAverage(P, 300), m20: bestAverage(P, 1200) },
+      sources: sourcesOf(samples)
     };
   }
 
@@ -1003,7 +1047,7 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
       avgP: avg(P), maxP: P.length ? Math.max(...P) : 0,
       avgHr: avg(hrs), maxHr: hrs.length ? Math.max(...hrs) : 0,
       avgCad: avg(cads), maxCad: cads.length ? Math.max(...cads) : 0,
-      avgTarget: avg(tg),
+      avgTarget: avg(tg), sources: sourcesOf(seg),
       dist: seg.length ? (seg[seg.length - 1].d || 0) - (from > 0 ? (samples[from - 1].d || 0) : 0) : 0
     };
   }
@@ -1163,7 +1207,10 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
     w.write(2, [start, 0, 0, 0]);
 
     // record (20)
-    w.define(3, 20, [[253, 'uint32'], [3, 'uint8'], [4, 'uint8'], [5, 'uint32'], [6, 'uint16'], [7, 'uint16']]);
+    const hasBal = S.some(s => s.bal > 0);
+    w.define(3, 20, [[253, 'uint32'], [3, 'uint8'], [4, 'uint8'], [5, 'uint32'], [6, 'uint16'], [7, 'uint16']].concat(hasBal ? [[30, 'uint8']] : []));
+    // équilibre gauche/droite (FIT : part de la jambe droite, bit 0x80 = « droite »)
+    const lrb = bal => bal > 0 && bal < 100 ? 0x80 | Math.round(100 - bal) : null;
     const pauses = (session.pauses || []).slice().sort((a, b) => a.from - b.from);
     let pi = 0;
     for (let i = 0; i < S.length; i++) {
@@ -1183,7 +1230,7 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
         s.d !== undefined ? s.d * 100 : null,
         s.s !== undefined ? (s.s / 3.6) * 1000 : null,
         s.p >= 0 ? s.p : null
-      ]);
+      ].concat(hasBal ? [lrb(s.bal)] : []));
     }
 
     // event : arrêt du chrono
@@ -1223,7 +1270,7 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
     w.define(5, 18, [[254, 'uint16'], [253, 'uint32'], [0, 'enum'], [1, 'enum'], [2, 'uint32'], [5, 'enum'], [6, 'enum'],
       [7, 'uint32'], [8, 'uint32'], [9, 'uint32'], [11, 'uint16'], [14, 'uint16'], [15, 'uint16'], [16, 'uint8'], [17, 'uint8'],
       [18, 'uint8'], [19, 'uint8'], [20, 'uint16'], [21, 'uint16'], [25, 'uint16'], [26, 'uint16'], [28, 'enum'],
-      [34, 'uint16'], [35, 'uint16'], [36, 'uint16'], [45, 'uint16'], [48, 'uint32']]);
+      [34, 'uint16'], [35, 'uint16'], [36, 'uint16'], [45, 'uint16'], [48, 'uint32'], [37, 'uint16']]);
     w.write(5, [
       0, end, 8, 1, start, 2, 6,
       elapsed * 1000, timer * 1000, (sm.distance || 0) * 100, sm.calories,
@@ -1231,7 +1278,8 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
       sm.avgHr || null, sm.maxHr || null, sm.avgCad || null, sm.maxCad || null,
       sm.avgP, sm.maxP, 0, lapCount, 0,
       sm.np || null, sm.tss ? sm.tss * 10 : null, sm.IF ? sm.IF * 1000 : null,
-      session.ftp || null, Math.round((sm.kj || 0) * 1000)
+      session.ftp || null, Math.round((sm.kj || 0) * 1000),
+      sm.sources && sm.sources.bal ? 0x8000 | Math.round((100 - sm.sources.bal) * 100) : null
     ]);
 
     // activity (34)
@@ -1278,7 +1326,7 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
   else root.WC = Object.assign(root.WC || {}, { FIT: api });
 })(typeof window !== 'undefined' ? window : globalThis);
 
-/* D Tri Training — Bluetooth : home trainer (FTMS / Wahoo), cardio, simulateurs */
+/* D Tri Training — Bluetooth : home trainer (FTMS / Wahoo), cardio, cadence, pédales de puissance, simulateurs */
 (function (root) {
   'use strict';
 
@@ -1631,6 +1679,102 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
   }
 
   // ------------------------------------------------------------------ Simulateurs (mode démo)
+  // capteur de puissance Bluetooth (service Cycling Power 0x1818) : pédales Favero Assioma Duo, etc.
+  // les pédales envoient puissance totale, équilibre gauche/droite et cadence sur un seul canal Bluetooth
+  class PowerMeter extends Emitter {
+    constructor() { super(); this.state = 'disconnected'; this.name = ''; this.power = 0; this.cad = 0; this.bal = null; this.battery = null; this.ts = 0; this._crank = null; this.cp = null; }
+    async connect(avoidId) {
+      if (!bluetoothAvailable()) throw new Error('Bluetooth Web indisponible sur ce navigateur.');
+      const device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'ASSIOMA' }, { namePrefix: 'Assioma' }, { services: [0x1818] }], optionalServices: [0x1818, 0x180F] });
+      if (avoidId && device.id === avoidId) throw new Error('Ça, c’est ton KICKR. Choisis les pédales (nom commençant par ASSIOMA).');
+      this.device = device; this.name = device.name || 'Capteur de puissance';
+      device.addEventListener('gattserverdisconnected', () => this._onDisconnect());
+      this._want = true;
+      await this._setup();
+      return this.name;
+    }
+    async _setup() {
+      this.state = 'connecting'; this.emit('state', this.state);
+      const server = await this.device.gatt.connect();
+      const svc = await server.getPrimaryService(0x1818);
+      const ch = await svc.getCharacteristic(0x2A63);
+      ch.addEventListener('characteristicvaluechanged', e => this.parse(e.target.value));
+      await ch.startNotifications();
+      try { this.cp = await svc.getCharacteristic(0x2A66); } catch (e) { this.cp = null; }
+      try { const b = await (await server.getPrimaryService(0x180F)).getCharacteristic(0x2A19); this.battery = (await b.readValue()).getUint8(0); } catch (e) { /* pas de niveau de batterie */ }
+      this._watch = this._watch || setInterval(() => { if (this.state === 'connected' && this.ts && Date.now() - this.ts > 3000 && (this.power || this.cad)) { this.power = 0; this.cad = 0; this.emit('data', this); } }, 1000);
+      this.state = 'connected'; this.emit('state', this.state);
+    }
+    // Cycling Power Measurement (0x2A63)
+    parse(dv) {
+      const f = dv.getUint16(0, true); let o = 2;
+      const power = dv.getInt16(o, true); o += 2;
+      let bal = null;
+      if (f & 0x01) { const v = dv.getUint8(o) / 2; o += 1; bal = v > 0 && v < 100 ? Math.round(v * 10) / 10 : null; } // part de la jambe gauche (bit 1 = référence gauche)
+      if (f & 0x04) o += 2;            // couple cumulé
+      if (f & 0x10) o += 6;            // tours de roue
+      const now = Date.now();
+      if (f & 0x20) {                  // tours de manivelle → cadence
+        const revs = dv.getUint16(o, true), t = dv.getUint16(o + 2, true); o += 4;
+        if (this._crank && revs !== this._crank.revs) {
+          const dr = (revs - this._crank.revs) & 0xFFFF, dt = ((t - this._crank.t) & 0xFFFF) / 1024;
+          if (dt > 0 && dr < 20) this.cad = Math.round(dr / dt * 60);
+          this._crank = { revs, t, at: now };
+        } else if (!this._crank) this._crank = { revs, t, at: now };
+        else if (now - this._crank.at > 2500) this.cad = 0;
+      }
+      this.power = Math.max(0, power);
+      if (this.power === 0 && this.cad === 0) bal = null;
+      this.bal = bal;
+      this.ts = now;
+      this.emit('data', this);
+    }
+    // étalonnage manuel (zéro) : pédales sans appui ; les Assioma le font aussi toutes seules
+    async calibrate() {
+      if (!this.cp) throw new Error('Ces pédales ne proposent pas l’étalonnage par Bluetooth.');
+      await this.cp.startNotifications();
+      return new Promise((resolve, reject) => {
+        const to = setTimeout(() => { this.cp.removeEventListener('characteristicvaluechanged', h); reject(new Error('Pas de réponse des pédales. Fais tourner les manivelles pour les réveiller, puis réessaie.')); }, 10000);
+        const h = e => {
+          const v = e.target.value; if (v.getUint8(0) !== 0x20 || v.getUint8(1) !== 0x0C) return;
+          clearTimeout(to); this.cp.removeEventListener('characteristicvaluechanged', h);
+          if (v.getUint8(2) === 1) resolve(v.byteLength >= 5 ? v.getInt16(3, true) : null);
+          else reject(new Error('Étalonnage refusé par les pédales. Vérifie qu’aucun pied n’appuie dessus.'));
+        };
+        this.cp.addEventListener('characteristicvaluechanged', h);
+        this.cp.writeValue(new Uint8Array([0x0C])).catch(err => { clearTimeout(to); reject(err); });
+      });
+    }
+    async _onDisconnect() {
+      this.state = 'disconnected'; this.power = 0; this.cad = 0; this.emit('state', this.state);
+      for (let a = 1; a <= 30 && this._want; a++) {
+        this.state = 'reconnecting'; this.emit('state', this.state);
+        await sleep(Math.min(8000, 1000 * a));
+        try { await this._setup(); return; } catch (e) { /* on réessaie */ }
+      }
+      this.state = 'disconnected'; this.emit('state', this.state);
+    }
+    disconnect() { this._want = false; try { this.device && this.device.gatt.disconnect(); } catch (e) { /* */ } this.state = 'disconnected'; this.power = 0; this.cad = 0; this.emit('state', this.state); }
+  }
+
+  // pédales simulées pour le mode démo : elles lisent un peu plus que le KICKR (pertes de transmission)
+  // les valeurs sont lues à la volée sur le KICKR simulé, quelle que soit l'accélération de l'horloge
+  class SimPowerMeter extends Emitter {
+    constructor(trainer) { super(); this.trainer = trainer; this.state = 'disconnected'; this.name = 'ASSIOMA démo'; this.battery = 82; this.factor = 1.03; this.cp = true; }
+    get _d() { return this.state === 'connected' ? (this.trainer.data || {}) : {}; }
+    get power() { const p = this._d.power || 0; return p ? Math.round(p * this.factor * (0.99 + 0.02 * Math.abs(Math.sin(p * 7.3 + Date.now() / 900)))) : 0; }
+    get cad() { const c = this._d.cadence || 0; return c ? c + (Math.round(Date.now() / 1700) % 3) - 1 : 0; }
+    get bal() { return this.power ? Math.round((49.2 + 0.8 * Math.sin(Date.now() / 5000)) * 10) / 10 : null; }
+    get ts() { return this.state === 'connected' ? Date.now() : 0; }
+    async connect() {
+      this.state = 'connected'; this.emit('state', this.state);
+      this._t = setInterval(() => this.emit('data', this), 500);
+      return this.name;
+    }
+    async calibrate() { await sleep(1200); return 1180 + Math.round(Math.random() * 40); }
+    disconnect() { clearInterval(this._t); this.state = 'disconnected'; this.emit('state', this.state); }
+  }
+
   class SimTrainer extends Emitter {
     constructor(getFtp) {
       super();
@@ -1691,7 +1835,7 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
     disconnect() { clearInterval(this._t); this.state = 'disconnected'; this.emit('state', this.state); }
   }
 
-  const api = { Trainer, HeartRate, CadenceSensor, SimTrainer, SimHeartRate, speedFromPower, bluetoothAvailable, clock, Emitter };
+  const api = { Trainer, HeartRate, CadenceSensor, PowerMeter, SimPowerMeter, SimTrainer, SimHeartRate, speedFromPower, bluetoothAvailable, clock, Emitter };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.WC = Object.assign(root.WC || {}, { BLE: api });
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1704,7 +1848,7 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
   const B = isNode ? require('./ble.js') : root.WC.BLE;
 
   class Runner extends B.Emitter {
-    // opts : { workout, tree, ftp, trainer, hr, autoPause, clock, restore }
+    // opts : { workout, tree, ftp, trainer, hr, cad, pm, powerSrc, match, autoPause, clock, restore }
     constructor(opts) {
       super();
       this.o = opts;
@@ -1720,12 +1864,15 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
       this.stepIdx = -1; this.startTime = null; this.distance = 0;
       this._zeroSince = null; this._autoPaused = false; this._lastBeep = null;
       this._lowCadSince = null;
+      // pédales de puissance : source de référence et calage de l'ERG sur leur mesure
+      this.pm = opts.pm || null; this.powerSrc = opts.powerSrc || 'pedals'; this.match = opts.match !== false;
+      this.pmRatio = 1; this._pmOk = false; this._pmSeen = false; this._halfN = 0;
       if (opts.restore) this._restore(opts.restore);
     }
 
     _restore(r) {
       this.startTime = r.startTime; this.samples = r.samples || []; this.laps = r.laps || [];
-      this.pauses = r.pauses || []; this.elapsed = r.elapsed || 0; this.intensity = r.intensity || 1;
+      this.pauses = r.pauses || []; this.elapsed = r.elapsed || 0; this.intensity = r.intensity || 1; this.pmRatio = r.pmRatio || 1;
       this.distance = this.samples.length ? (this.samples[this.samples.length - 1].d || 0) : 0;
       this.stepIdx = this._stepAt(this.elapsed);
       this.state = 'paused';
@@ -1790,16 +1937,38 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
         this.trainer.guide = this.targetWatts();
         if (force || !this.trainer.mode || this.trainer.mode.kind !== 'sim' || this.trainer.mode.grade !== this.grade) this.trainer.setSim(this.grade);
       } else {
-        const w = this.targetWatts();
-        if (force || !this.trainer.mode || this.trainer.mode.kind !== 'erg' || this.trainer.mode.watts !== w) this.trainer.setErg(w);
+        const w = this.ergCommand();
+        const m = this.trainer.mode;
+        if (force || !m || m.kind !== 'erg' || Math.abs(m.watts - w) >= (this.matching ? 2 : 1)) this.trainer.setErg(w);
       }
     }
 
-    // cadence : capteur dédié s'il est connecté, sinon celle du home trainer
+    // pédales : données fraîches (moins de 3 s) ou rien
+    pmData() {
+      const m = this.pm;
+      return m && m.state === 'connected' && m.ts && Date.now() - m.ts < 3000 ? m : null;
+    }
+    // puissance de référence : les pédales si elles sont connectées et choisies, sinon le KICKR
+    get refSource() { return this.powerSrc === 'pedals' && this.pmData() ? 'pedals' : 'trainer'; }
+    get matching() { return this.match && this.refSource === 'pedals'; }
+    // consigne envoyée au KICKR : corrigée de l'écart KICKR / pédales pour que les pédales affichent la cible
+    ergCommand() { const w = this.targetWatts(); return this.matching ? Math.round(w / this.pmRatio) : w; }
+
+    // cadence : capteur dédié, sinon pédales, sinon home trainer
     _cad(d) {
       const c = this.o.cad;
       if (c && c.state === 'connected' && Date.now() - c.ts < 4000) return c.rpm;
+      const m = this.pmData();
+      if (m && m.cad > 0) return m.cad;
       return (d && d.cadence) || 0;
+    }
+
+    // rapport pédales / KICKR, appris en continu sur les portions stables
+    _learnRatio(pm, d0) {
+      if (!pm || this.isFree || !(pm.power > 60) || !(d0.power > 60) || !this.step || this.elapsed - this.step.start < 8) return;
+      const r = pm.power / d0.power;
+      if (r > 0.4 && r < 0.62 && ++this._halfN === 45) this.emit('pmhalf', r);
+      if (r > 0.8 && r < 1.25) this.pmRatio = Math.max(0.85, Math.min(1.18, this.pmRatio + (r - this.pmRatio) / 20));
     }
 
     _currentHr() {
@@ -1812,7 +1981,14 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
     tick() {
       const now = this.clock.now();
       const d0 = (this.trainer && this.trainer.data) || { power: 0, cadence: 0, speed: 0 };
-      const d = Object.assign({}, d0, { cadence: this._cad(d0) });
+      const pm = this.pmData();
+      const d = Object.assign({}, d0, { power: this.powerSrc === 'pedals' && pm ? pm.power : (d0.power || 0), cadence: this._cad(d0) });
+      // pédales perdues ou retrouvées en cours de séance
+      if (this.pm) {
+        if (this._pmOk && !pm && this.state === 'running') this.emit('pmlost');
+        if (!this._pmOk && pm && this._pmSeen) this.emit('pmback');
+        this._pmOk = !!pm; if (pm) this._pmSeen = true;
+      }
       if (this.state === 'running') {
         this._last = now;
         // la progression avance seconde par seconde, synchronisée avec l'enregistrement 1 Hz
@@ -1821,11 +1997,18 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
           if (i !== this.stepIdx) this._enterStep(i);
           const speed = d.speed || B.speedFromPower(d.power || 0, (this.trainer && this.trainer.weight) || 84);
           this.distance += speed / 3.6;
-          this.samples.push({
+          const smp = {
             t: this._nextSample, p: Math.round(d.power || 0), hr: this._currentHr(),
             c: Math.round(d.cadence || 0), s: Math.round(speed * 100) / 100, d: Math.round(this.distance * 10) / 10,
             tg: this.isFree ? 0 : this.targetWatts()
-          });
+          };
+          if (this.pm) {
+            // les deux mesures, pour les comparer après la séance
+            smp.pk = Math.round(d0.power || 0); smp.ck = Math.round(d0.cadence || 0);
+            if (pm) { smp.pp = Math.round(pm.power); smp.cp = Math.round(pm.cad || 0); if (pm.bal) smp.bal = pm.bal; }
+            this._learnRatio(pm, d0);
+          }
+          this.samples.push(smp);
           this.elapsed += 1;
           this._nextSample += 1000;
           const live = now - this._nextSample < 1500;
@@ -1935,7 +2118,7 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
       return {
         workout: this.workout, tree: this.o.tree || this.workout.tree, ftp: this.ftp, startTime: this.startTime,
         samples: this.samples, laps: this.laps.map(l => Object.assign({}, l)), pauses: this.pauses.map(p => Object.assign({}, p)),
-        elapsed: this.elapsed, intensity: this.intensity, savedAt: this.clock.now()
+        elapsed: this.elapsed, intensity: this.intensity, pmRatio: this.pmRatio, powerSrc: this.pm ? this.refSource : 'trainer', savedAt: this.clock.now()
       };
     }
 
@@ -4040,6 +4223,7 @@ Il faut exactement ${nWeeks} semaines.`,
     strength: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/></svg>',
     other: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
     scale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 9a5 5 0 018 0M12 9l1.5-2"/></svg>',
+    pedal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="6.5" width="12" height="11" rx="3"/><path d="M2.5 12H9M15 6.5v11"/></svg>',
     cad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 12l4.5-4.5M17 17h3"/></svg>',
     heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20s-7-4.5-9-9a4.8 4.8 0 019-3 4.8 4.8 0 019 3c-2 4.5-9 9-9 9z"/></svg>',
     play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>',
@@ -4064,7 +4248,7 @@ Il faut exactement ${nWeeks} semaines.`,
 
   // ------------------------------------------------------------------ état
   const DEFAULT_PROFILE = { name: '', ftp: 200, weight: 75, hrMax: 185, hrRest: 55, lthr: '', runT: 330, css: 130, pool: 25, levels: { swim: 3, bike: 3, run: 3 }, years: '', hours: 7 };
-  const DEFAULT_SETTINGS = { trainerHint: '6AE5', autoPause: true, beeps: true, voice: true, vibrate: true, scaleToLevel: true, sportType: 'VirtualRide', autoStrava: false, step: 0.02, runTarget: 'pace' };
+  const DEFAULT_SETTINGS = { trainerHint: '6AE5', autoPause: true, beeps: true, voice: true, vibrate: true, scaleToLevel: true, sportType: 'VirtualRide', autoStrava: false, step: 0.02, runTarget: 'pace', powerSrc: 'pedals', powerMatch: true, hasPedals: false };
   const now = new Date();
   const S = {
     profile: LS.get('profile', null),
@@ -4146,21 +4330,22 @@ Il faut exactement ${nWeeks} semaines.`,
   }
 
   // ------------------------------------------------------------------ appareils (KICKR)
-  const real = { trainer: new BLE.Trainer(), hr: new BLE.HeartRate(), cad: new BLE.CadenceSensor() };
+  const real = { trainer: new BLE.Trainer(), hr: new BLE.HeartRate(), cad: new BLE.CadenceSensor(), pm: new BLE.PowerMeter() };
   const sim = { trainer: new BLE.SimTrainer(() => P().ftp), hr: null };
   sim.hr = new BLE.SimHeartRate(() => sim.trainer.data.power, P);
+  sim.pm = new BLE.SimPowerMeter(sim.trainer);
   let dev = S.demo ? sim : real;
 
   function setDemo(on) {
     S.demo = on; LS.set('demo', on);
-    if (on) { real.trainer.disconnect(); real.hr.disconnect(); real.cad.disconnect(); dev = sim; sim.trainer.connect(); sim.hr.connect(); }
-    else { sim.trainer.disconnect(); sim.hr.disconnect(); dev = real; }
+    if (on) { real.trainer.disconnect(); real.hr.disconnect(); real.cad.disconnect(); real.pm.disconnect(); dev = sim; sim.trainer.connect(); sim.hr.connect(); }
+    else { sim.trainer.disconnect(); sim.hr.disconnect(); sim.pm.disconnect(); dev = real; }
     bindDevices(); render();
   }
   function bindDevices() {
-    [real.trainer, real.hr, real.cad, sim.trainer, sim.hr].filter(Boolean).forEach(d => { d._ui && d._ui.forEach(off => off()); d._ui = []; });
+    [real.trainer, real.hr, real.cad, real.pm, sim.trainer, sim.hr, sim.pm].filter(Boolean).forEach(d => { d._ui && d._ui.forEach(off => off()); d._ui = []; });
     dev.trainer._ui.push(dev.trainer.on('warn', m => toast(m, true)));
-    [dev.trainer, dev.hr, dev.cad].filter(Boolean).forEach(d => {
+    [dev.trainer, dev.hr, dev.cad, dev.pm].filter(Boolean).forEach(d => {
       d._ui.push(d.on('state', () => { updateDevices(); }));
       d._ui.push(d.on('data', () => { throttleDevices(); }));
     });
@@ -4283,6 +4468,15 @@ Il faut exactement ${nWeeks} semaines.`,
       set('dv-cad-live', c.state === 'connected' ? `${r0(c.rpm)}<span class="small muted"> rpm</span>` : '');
       set('dv-cad-btn', c.state === 'disconnected' ? 'Connecter' : 'Déconnecter');
     }
+    const m = dev.pm;
+    if (m) {
+      const on = m.state === 'connected';
+      set('dv-pm-name', esc(on ? m.name : 'Pédales Assioma Duo'));
+      set('dv-pm-state', m.state === 'disconnected' ? 'Facultatif · puissance gauche / droite' : lab(m.state) + (on ? ' · ' + (S.settings.powerSrc === 'trainer' ? 'comparaison' : 'puissance de référence') + (m.battery !== null && m.battery !== undefined ? ' · ' + m.battery + ' %' : '') : ''));
+      set('dv-pm-live', on ? `${r0(m.power)} W<br><span class="small muted">${m.bal ? 'G ' + r0(m.bal) + ' · D ' + r0(100 - m.bal) : r0(m.cad) + ' rpm'}</span>` : '');
+      set('dv-pm-btn', m.state === 'disconnected' ? 'Connecter' : 'Réglages');
+      const tp = $('#tb-pm'); if (tp) tp.className = 'dot ' + (on ? 'on' : (m.state === 'connecting' || m.state === 'reconnecting') ? 'wait' : '');
+    }
     const cls = d => 'dot ' + (d.state === 'connected' ? 'on' : (d.state === 'connecting' || d.state === 'reconnecting') ? 'wait' : '');
     const a = $('#tb-tr'), b = $('#tb-hr');
     if (a) a.className = cls(t); if (b) b.className = cls(h);
@@ -4404,7 +4598,7 @@ Il faut exactement ${nWeeks} semaines.`,
       if (choice === 'demo') setDemo(true);
       else { await connectTrainer(); if (dev.trainer.state !== 'connected') return; }
     }
-    const runner = new RUN.Runner({ workout: { id: w.id, name: w.name, cat: w.cat, level: w.level, test: w.test, source: w.source }, tree: opts.tree || w.tree, ftp: P().ftp, trainer: dev.trainer, hr: dev.hr, cad: dev.cad || null, autoPause: S.settings.autoPause, restore: opts.restore });
+    const runner = new RUN.Runner({ workout: { id: w.id, name: w.name, cat: w.cat, level: w.level, test: w.test, source: w.source }, tree: opts.tree || w.tree, ftp: P().ftp, trainer: dev.trainer, hr: dev.hr, cad: dev.cad || null, pm: dev.pm && dev.pm.state === 'connected' ? dev.pm : null, powerSrc: S.settings.powerSrc || 'pedals', match: S.settings.powerMatch !== false, autoPause: S.settings.autoPause, restore: opts.restore });
     if (opts.intensity && opts.intensity !== 1) runner.intensity = opts.intensity;
     runner.planSessionId = opts.planSessionId || (opts.restore && opts.restore.planSessionId) || null;
     S.runner = runner;
@@ -4419,7 +4613,7 @@ Il faut exactement ${nWeeks} semaines.`,
       <div class="p-head"><button class="iconbtn" data-p="close" aria-label="Terminer">${IC.close}</button><div class="title ellipsis">${esc(run.workout.name)}</div><span class="p-elapsed" id="p-el">0:00</span></div>
       <div class="p-main">
         <div class="p-interval"><span class="zone-edge" id="p-zedge"></span><div style="padding-left:6px;min-width:0"><div class="rep" id="p-rep"></div><div class="lbl ellipsis" id="p-lbl">—</div><div class="next ellipsis" id="p-next"></div></div><div class="remain" id="p-rem">0:00</div></div>
-        <div class="p-power"><div class="big" id="p-pw">0<small>W</small></div><div class="target" id="p-tg"></div></div>
+        <div class="p-power"><div class="p-srctag" id="p-srctag" ${run.pm ? '' : 'hidden'}><i></i>puissance <span id="p-srcname"></span></div><div class="big" id="p-pw">0<small>W</small></div><div class="target" id="p-tg"></div>${sourcesHTML()}</div>
         <div class="p-metrics"><div class="m" id="p-m-cad"><b id="p-cad">0</b><span id="p-cad-l">rpm</span></div><div class="m"><b id="p-hr">–</b><span>bpm</span></div><div class="m"><b id="p-lapavg">0</b><span>moy. interv.</span></div><div class="m"><b id="p-tss">0</b><span>TSS</span></div></div>
         <div class="p-chart"><canvas id="p-chart"></canvas></div>
       </div>
@@ -4434,8 +4628,10 @@ Il faut exactement ${nWeeks} semaines.`,
     document.body.style.overflow = 'hidden';
     Hist.push();
     const pw = []; // puissance lissée 3 s
-    const offData = dev.trainer.on('data', d => { pw.push({ t: Date.now(), p: d.power || 0 }); while (pw.length && Date.now() - pw[0].t > 3000) pw.shift(); });
-    const p3 = () => pw.length ? pw.reduce((a, x) => a + x.p, 0) / pw.length : (dev.trainer.data.power || 0);
+    const refPower = () => { const m = run.pmData(); return run.refSource === 'pedals' && m ? m.power : (dev.trainer.data.power || 0); };
+    const pwT = setInterval(() => { pw.push({ t: Date.now(), p: refPower() }); while (pw.length && Date.now() - pw[0].t > 3000) pw.shift(); }, 250);
+    const offData = () => clearInterval(pwT);
+    const p3 = () => pw.length ? pw.reduce((a, x) => a + x.p, 0) / pw.length : refPower();
     let lastChart = 0, alertT = null;
     const set = (id, v) => { const e = document.getElementById(id); if (e && e.innerHTML !== v) e.innerHTML = v; };
 
@@ -4480,6 +4676,7 @@ Il faut exactement ${nWeeks} semaines.`,
       const pausedHtml = `${IC.play}<span>Reprendre</span>`, runHtml = `${IC.pause}<span>Pause</span>`;
       const want = run.state === 'paused' ? pausedHtml : runHtml;
       if (pb.innerHTML !== want) pb.innerHTML = want;
+      updateSources(run, set);
       if (Date.now() - lastChart > 1000) { lastChart = Date.now(); drawPlayerChart(run); }
     }
 
@@ -4508,6 +4705,10 @@ Il faut exactement ${nWeeks} semaines.`,
       say(`${up ? 'Plus vite' : 'Moins vite'}, cadence ${target}`);
       clearTimeout(alertT); alertT = setTimeout(() => a.remove(), 5000);
     });
+    const banner = (t, ms) => { let a = $('#p-alert'); if (!a) { a = document.createElement('div'); a.id = 'p-alert'; a.className = 'p-alert'; el.appendChild(a); } a.textContent = t; clearTimeout(alertT); alertT = setTimeout(() => a.remove(), ms || 6000); };
+    run.on('pmlost', () => { vibrate([200, 80, 200]); banner('Pédales perdues : le KICKR prend le relais pour la puissance'); say('Pédales perdues'); });
+    run.on('pmback', () => { toast('Pédales retrouvées'); });
+    run.on('pmhalf', () => banner('Les pédales envoient environ la moitié de la puissance. Dans l’app Favero Assioma, règle le Bluetooth sur un seul canal (pas « Dual channel L/R »).', 12000));
     run.on('state', st => {
       if (st === 'paused' && run._autoPaused) toast('Pause automatique, reprends le pédalage pour continuer');
       update();
@@ -4624,7 +4825,8 @@ Il faut exactement ${nWeeks} semaines.`,
     const sess = {
       id: 's' + samples[0].t, startTime: samples[0].t, name: snap.workout.name, workoutId: snap.workout.id, cat: snap.workout.cat,
       dsl: W.toDSL(snap.tree), ftp: snap.ftp, samples, laps: snap.laps.filter(l => l.to === null ? true : l.to > l.from).map(l => Object.assign({}, l, { to: l.to === null ? samples.length : l.to })),
-      pauses: (snap.pauses || []).filter(p => p.to), summary, completed: !!completed, planSessionId: snap.planSessionId || null, intensity: snap.intensity
+      pauses: (snap.pauses || []).filter(p => p.to), summary, completed: !!completed, planSessionId: snap.planSessionId || null, intensity: snap.intensity,
+      powerRef: summary.sources && summary.sources.cover > 0.5 && snap.powerSrc === 'pedals' ? 'pedals' : 'trainer'
     };
     if (snap.workout.test === 'ramp') {
       const best1 = M.bestAverage(samples.map(s => s.p), 60);
@@ -4648,6 +4850,14 @@ Il faut exactement ${nWeeks} semaines.`,
     ctx.beginPath(); ctx.moveTo(0, h);
     for (let i = 0; i < smp.length; i += step) ctx.lineTo(X(i), Y(smp[i].tg || 0));
     ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+    // l'autre capteur (KICKR ou pédales), en fin trait coloré
+    const alt = sess.powerRef === 'pedals' ? 'pk' : 'pp';
+    if (smp.some(s => s.pp !== undefined)) {
+      ctx.beginPath(); ctx.strokeStyle = alt === 'pk' ? 'rgba(98,176,255,.9)' : 'rgba(242,169,59,.9)'; ctx.lineWidth = 1;
+      let st = false;
+      for (let i = 0; i < smp.length; i += step) { let a = 0, n = 0; for (let k = i; k < Math.min(smp.length, i + step); k++) { if (smp[k][alt] !== undefined) { a += smp[k][alt]; n++; } } if (!n) continue; if (!st) { ctx.moveTo(X(i), Y(a / n)); st = true; } else ctx.lineTo(X(i), Y(a / n)); }
+      ctx.stroke();
+    }
     ctx.beginPath(); ctx.strokeStyle = '#EEF3FA'; ctx.lineWidth = 1.2;
     for (let i = 0; i < smp.length; i += step) { let a = 0, n = 0; for (let k = i; k < Math.min(smp.length, i + step); k++) { a += smp[k].p; n++; } i ? ctx.lineTo(X(i), Y(a / n)) : ctx.moveTo(0, Y(a / n)); }
     ctx.stroke();
@@ -4779,6 +4989,104 @@ Il faut exactement ${nWeeks} semaines.`,
     updateDevices();
   }
 
+  // ------------------------------------------------------------------ pédales de puissance (Favero Assioma Duo)
+  const SRC_COL = { trainer: '#62b0ff', pedals: '#f2a93b' };
+  const pmLabel = () => 'Assioma';
+  const balTxt = bal => bal ? `G ${fx(bal, 0)} · D ${fx(100 - bal, 0)}` : 'G – · D –';
+
+  async function connectPm() {
+    const m = dev.pm; if (!m) return;
+    if (m.state !== 'disconnected') { openPmSheet(); return; }
+    try {
+      const n = await m.connect(real.trainer.device ? real.trainer.device.id : null);
+      if (!S.settings.hasPedals) { S.settings.hasPedals = true; saveSettings(); }
+      toast('Pédales connectées : ' + n);
+    } catch (e) { if (e.name !== 'NotFoundError') toast(e.message, true); }
+    updateDevices(); render();
+  }
+
+  // réglages et état des pédales
+  function openPmSheet() {
+    const m = dev.pm; if (!m) return;
+    const body = () => {
+      const on = m.state === 'connected', ref = S.settings.powerSrc !== 'trainer';
+      return `<span class="tag" style="color:${SRC_COL.pedals}">Capteur de puissance</span>
+        <h2 style="margin-top:8px">Pédales ${esc(pmLabel())} Duo</h2>
+        <p class="small muted">${on ? esc(m.name) + (m.battery !== null && m.battery !== undefined ? ' · batterie ' + m.battery + ' %' : '') : 'Non connectées'}</p>
+        <div class="statline" style="margin:12px 0" id="pm-live">${pmLiveHTML(m)}</div>
+        <div class="small muted" style="margin:14px 0 6px">Puissance de référence</div>
+        <div class="chips"><button class="chip ${ref ? 'on' : ''}" data-k="src" data-v="pedals"><span class="sw" style="background:${SRC_COL.pedals}"></span>Pédales ${esc(pmLabel())}</button><button class="chip ${!ref ? 'on' : ''}" data-k="src" data-v="trainer"><span class="sw" style="background:${SRC_COL.trainer}"></span>KICKR</button></div>
+        <p class="small muted" style="margin:6px 0 0">C’est la puissance affichée en grand, enregistrée et envoyée à Strava et Garmin. L’autre reste affichée en petit pour comparer.</p>
+        ${ref ? `<div class="switch" style="margin-top:12px"><span>Caler l’ERG du KICKR sur les pédales<br><span class="small muted">Le KICKR corrige sa résistance pour que les pédales affichent exactement la cible.</span></span><input type="checkbox" data-k="match" ${S.settings.powerMatch !== false ? 'checked' : ''}></div>` : ''}
+        <h3 style="margin:18px 0 6px">Étalonnage (zéro)</h3>
+        <p class="small muted">Les Assioma s’étalonnent toutes seules. Pour forcer un zéro : descends du vélo, aucun appui sur les pédales, manivelles immobiles.</p>
+        <div class="btn-row" style="margin-top:8px"><button class="btn" data-k="cal" ${on ? '' : 'disabled'}>Étalonner maintenant</button>${on ? '<button class="btn" data-k="off">Déconnecter</button>' : '<button class="btn primary" data-k="on">Connecter</button>'}</div>
+        <div id="pm-cal" class="small" style="margin-top:8px"></div>
+        <details class="small muted" style="margin-top:14px"><summary>Si les pédales n’apparaissent pas</summary><p style="margin-top:6px">Fais tourner les manivelles pour les réveiller. En Bluetooth, elles ne se connectent qu’à un appareil à la fois : ferme l’app Favero Assioma. Ta Forerunner peut rester appairée en ANT+, ça ne gêne pas. Dans l’app Favero, laisse la transmission Bluetooth sur un seul canal (pas « Dual channel L/R »), sinon l’app ne reçoit que la moitié de la puissance.</p></details>`;
+    };
+    const sh = openSheet(`<div id="pm-body">${body()}</div>`);
+    const re = () => { $('#pm-body', sh).innerHTML = body(); };
+    const live = setInterval(() => { const el = $('#pm-live', sh); if (!el || !document.body.contains(sh)) { clearInterval(live); return; } el.innerHTML = pmLiveHTML(m); }, 700);
+    sh.addEventListener('click', async e => {
+      const b = e.target.closest('[data-k]'); if (!b) return;
+      const k = b.dataset.k;
+      if (k === 'src') { S.settings.powerSrc = b.dataset.v; saveSettings(); re(); }
+      else if (k === 'off') { m.disconnect(); updateDevices(); re(); }
+      else if (k === 'on') { await connectPm(); re(); }
+      else if (k === 'cal') {
+        const out = $('#pm-cal', sh); out.textContent = 'Étalonnage en cours, ne touche pas aux pédales…'; b.disabled = true;
+        try { const v = await m.calibrate(); out.innerHTML = `<span style="color:var(--ok)">Étalonnage réussi</span>${v !== null && v !== undefined ? ' · valeur ' + v : ''}`; }
+        catch (err) { out.innerHTML = `<span style="color:var(--danger)">${esc(err.message)}</span>`; }
+        b.disabled = false;
+      }
+    });
+    sh.addEventListener('change', e => { if (e.target.dataset.k === 'match') { S.settings.powerMatch = e.target.checked; saveSettings(); } });
+  }
+  function pmLiveHTML(m) {
+    const on = m.state === 'connected';
+    return `<div class="stat"><b>${on ? r0(m.power) : '–'}</b><span>W</span></div><div class="stat"><b>${on ? r0(m.cad) : '–'}</b><span>rpm</span></div><div class="stat"><b style="font-size:18px">${on && m.bal ? balTxt(m.bal) : '–'}</b><span>gauche / droite %</span></div>`;
+  }
+
+  // lecteur : les deux sources côte à côte
+  function sourcesHTML() {
+    return `<div class="p-src" id="p-src" hidden>
+      <div class="src" id="src-k" style="--c:${SRC_COL.trainer}"><div class="hd"><i></i>KICKR<em id="src-k-ref"></em></div><div class="vals"><b id="src-k-w">–</b><small>W</small><b id="src-k-c">–</b><small>rpm</small></div><div class="ft" id="src-k-ft"></div></div>
+      <div class="src" id="src-p" style="--c:${SRC_COL.pedals}"><div class="hd"><i></i>${esc(pmLabel())}<em id="src-p-ref"></em></div><div class="vals"><b id="src-p-w">–</b><small>W</small><b id="src-p-c">–</b><small>rpm</small></div><div class="ft"><div class="lr"><span id="src-p-l">G –</span><span class="bar"><span id="src-p-bar"></span></span><span id="src-p-r">D –</span></div></div></div>
+    </div>`;
+  }
+  function updateSources(run, set) {
+    const box = document.getElementById('p-src'); if (!box) return;
+    const has = !!run.pm; box.hidden = !has;
+    document.getElementById('player').classList.toggle('dual', has);
+    if (!has) return;
+    const pm = run.pmData(), d = dev.trainer.data || {}, refP = run.refSource === 'pedals';
+    set('src-k-w', String(r0(d.power))); set('src-k-c', String(r0(d.cadence)));
+    set('src-k-ref', refP ? '' : 'référence'); set('src-p-ref', refP ? 'référence' : '');
+    $('#src-k').classList.toggle('ref', !refP); $('#src-p').classList.toggle('ref', refP);
+    set('src-k-ft', run.isFree ? 'mode libre' : `résistance réglée à ${r0(run.ergCommand())} W`);
+    $('#src-p').classList.toggle('lost', !pm);
+    set('src-p-w', pm ? String(r0(pm.power)) : '–'); set('src-p-c', pm ? String(r0(pm.cad)) : '–');
+    const bal = pm && pm.bal;
+    set('src-p-l', bal ? 'G ' + r0(bal) : (pm ? 'G –' : 'signal perdu')); set('src-p-r', bal ? 'D ' + r0(100 - bal) : (pm ? 'D –' : ''));
+    const bar = document.getElementById('src-p-bar'); if (bar) bar.style.width = (bal || 50) + '%';
+    set('p-srcname', refP ? `Pédales ${esc(pmLabel())}` : 'KICKR');
+    const tag = document.getElementById('p-srctag'); if (tag) tag.style.setProperty('--c', refP ? SRC_COL.pedals : SRC_COL.trainer);
+  }
+
+  // fiche activité : comparaison des deux capteurs
+  function sourcesCompareHTML(sm, detail) {
+    const s = sm && sm.sources; if (!s || !s.n) return '';
+    const refP = (detail && detail.powerRef) ? detail.powerRef === 'pedals' : Math.abs((sm.avgP || 0) - s.pedals) < Math.abs((sm.avgP || 0) - s.kickr);
+    const gap = s.gap * 100;
+    const row = (l, k, p) => `<tr><td>${l}</td><td>${k}</td><td>${p}</td></tr>`;
+    return `<h3 style="margin:18px 0 6px">KICKR et pédales</h3>
+      <table class="laps srccmp"><tr><th></th><th><span class="sw" style="background:${SRC_COL.trainer}"></span>KICKR</th><th><span class="sw" style="background:${SRC_COL.pedals}"></span>Pédales</th></tr>
+      ${row('Puissance moyenne', `<b>${r0(s.kickr)}</b> W`, `<b>${r0(s.pedals)}</b> W`)}
+      ${row('Cadence moyenne', s.cadK ? r0(s.cadK) + ' rpm' : '–', s.cadP ? r0(s.cadP) + ' rpm' : '–')}
+      ${row('Référence', refP ? '' : '✓', refP ? '✓' : '')}</table>
+      <p class="small muted" style="margin-top:8px">Les pédales lisent ${gap >= 0 ? '+' : ''}${fx(gap, 1)} % par rapport au KICKR${Math.abs(gap) <= 5 ? ', un écart normal (pertes de transmission, étalonnage)' : ' : pense à étalonner les pédales et à faire un spindown du KICKR'}.${s.bal ? ` Équilibre moyen : gauche ${fx(s.bal, 1)} %, droite ${fx(100 - s.bal, 1)} %.` : ''}${s.cover < 0.95 ? ` Pédales captées ${r0(s.cover * 100)} % du temps.` : ''}</p>`;
+  }
+
   // ------------------------------------------------------------------ navigation & vues
   const TABS = [['home', 'Accueil', IC.home], ['journal', 'Journal', IC.journal], ['library', 'Séances', IC.list], ['plan', 'Plan', IC.cal], ['bilan', 'Bilan', IC.chart]];
   function renderTabs() {
@@ -4796,7 +5104,7 @@ Il faut exactement ${nWeeks} semaines.`,
     const dot = d => d.state === 'connected' ? 'on' : (d.state === 'connecting' || d.state === 'reconnecting') ? 'wait' : '';
     const ini = (P().name || '').trim().slice(0, 1).toUpperCase();
     return `<div class="topbar"><div class="grow"><h1>${esc(title)}</h1>${sub ? `<div class="small muted">${esc(sub)}</div>` : ''}</div>
-      <button class="devpill" data-act="tab" data-v="home" aria-label="État des capteurs"><span class="dot ${dot(t)}" id="tb-tr"></span>KICKR<span class="dot ${dot(h)}" id="tb-hr" style="margin-left:6px"></span>FC</button>
+      <button class="devpill" data-act="tab" data-v="home" aria-label="État des capteurs"><span class="dot ${dot(t)}" id="tb-tr"></span>KICKR<span class="dot ${dot(h)}" id="tb-hr" style="margin-left:6px"></span>FC${dev.pm && (S.settings.hasPedals || dev.pm.state !== 'disconnected') ? `<span class="dot ${dot(dev.pm)}" id="tb-pm" style="margin-left:6px"></span>Pédales` : ''}</button>
       <button class="avatar ${S.view === 'profile' ? 'on' : ''}" data-act="tab" data-v="profile" aria-label="Profil et réglages">${ini ? esc(ini) : IC.user}</button></div>`;
   }
 
@@ -4898,6 +5206,7 @@ Il faut exactement ${nWeeks} semaines.`,
       <div class="card" style="padding:4px 16px">
         <div class="device"><div class="ico">${IC.bike}</div><div class="grow"><div><b id="dv-tr-name">Home trainer</b></div><div class="small muted" id="dv-tr-state">—</div></div><div class="live" id="dv-tr-live"></div><button class="btn sm" id="dv-tr-btn" data-act="connTrainer">Connecter</button></div>
         <div class="device"><div class="ico">${IC.heart}</div><div class="grow"><div><b id="dv-hr-name">Ceinture cardio</b></div><div class="small muted" id="dv-hr-state">—</div></div><div class="live" id="dv-hr-live"></div><button class="btn sm" id="dv-hr-btn" data-act="connHr">Connecter</button></div>
+        <div class="device" id="dv-pm"><div class="ico" style="color:${SRC_COL.pedals}">${IC.pedal}</div><div class="grow"><div><b id="dv-pm-name">Pédales Assioma Duo</b></div><div class="small muted" id="dv-pm-state">Facultatif</div></div><div class="live" id="dv-pm-live"></div><button class="btn sm" id="dv-pm-btn" data-act="connPm">Connecter</button></div>
         <div class="device" id="dv-cad" ${S.demo ? 'hidden' : ''}><div class="ico">${IC.cad || IC.bike}</div><div class="grow"><div><b id="dv-cad-name">Capteur de cadence</b></div><div class="small muted" id="dv-cad-state">Facultatif</div></div><div class="live" id="dv-cad-live"></div><button class="btn sm" id="dv-cad-btn" data-act="connCad">Connecter</button></div>
       </div></section>`;
     return html;
@@ -4983,6 +5292,8 @@ Il faut exactement ${nWeeks} semaines.`,
       ${a.test ? `<div class="notice" style="margin:12px 0"><b>Résultat du test : FTP ${a.test.ftp} W</b><br><span class="small">${a.test.kind === 'ramp' ? 'Meilleure minute ' + a.test.best1 + ' W × 75 %' : 'Moyenne 20 min ' + a.test.best20 + ' W × 95 %'}. FTP actuelle : ${p.ftp} W.</span>${a.test.ftp !== p.ftp ? `<button class="btn primary block" style="margin-top:10px" data-k="setftp">Utiliser ${a.test.ftp} W comme FTP</button>` : ''}</div>` : ''}
       <div class="statline" style="margin:12px 0">${stats.join('')}</div>
       ${detail && detail.samples && detail.samples.length > 10 ? '<canvas class="chart" id="a-chart" height="140"></canvas>' : ''}
+      ${kickr && detail.summary && detail.summary.sources && detail.summary.sources.n ? `<div class="legend"><span><i style="background:#EEF3FA"></i>${detail.powerRef === 'pedals' ? 'Pédales' : 'KICKR'} (référence)</span><span><i style="background:${detail.powerRef === 'pedals' ? SRC_COL.trainer : SRC_COL.pedals}"></i>${detail.powerRef === 'pedals' ? 'KICKR' : 'Pédales'}</span><span><i style="background:#ff5f5f"></i>FC</span><span><i class="dash"></i>cadence</span></div>` : ''}
+      ${kickr ? sourcesCompareHTML(detail.summary || s, detail) : ''}
       ${a.sport === 'run' && s.distance && s.duration >= 1500 && s.duration <= 2700 ? `<button class="btn ghost sm" data-k="runtest">C’était un test de 30 min ? Mettre à jour mes seuils</button>` : ''}
       ${a.sport === 'strength' ? strengthSummaryHTML(a) : ''}
       <h3 style="margin:18px 0 8px">Ressenti</h3><div id="a-feel">${feelEditorHTML(a)}</div>
@@ -5349,6 +5660,7 @@ Activité : ${sportName(a.sport)} « ${a.name} » le ${fmtDate(a.startTime)}. Du
 Ressenti : effort ${a.rpe || '?'}/10, sensations ${a.feel ? J.FEEL[a.feel] : '?'}${a.tags && a.tags.length ? ', ' + a.tags.join(', ') : ''}. ${a.notes ? 'Notes : ' + a.notes : ''}
 Nutrition : ${a.nutrition && a.nutrition.length ? r0(t.carbs) + ' g de glucides (' + r0(t.carbsH) + ' g/h), ' + r0(t.fluid) + ' ml de liquides, ' + r0(t.sodium) + ' mg de sodium' : 'non renseignée'}.
 ${lapRows && lapRows.length ? 'Intervalles (cible → réalisé) : ' + lapRows.map(l => `${l.label || 'étape'} ${Math.round(l.n / 6) / 10}min ${Math.round(l.avgTarget)}→${Math.round(l.avgP)}W${l.avgCad ? ' ' + Math.round(l.avgCad) + 'rpm' + (l.c ? ' (cible ' + l.c + ')' : '') : ''}`).join(' ; ') + '.' : ''}
+${s.sources && s.sources.n ? `Capteurs : KICKR ${r0(s.sources.kickr)} W moy., pédales Assioma ${r0(s.sources.pedals)} W moy. (écart ${fx(s.sources.gap * 100, 1)} %)${s.sources.bal ? ', équilibre gauche/droite ' + fx(s.sources.bal, 1) + ' / ' + fx(100 - s.sources.bal, 1) + ' %' : ''}.` : ''}
 Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donne 1 ou 2 conseils concrets pour la suite.`
     };
   }
@@ -5972,7 +6284,8 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     try {
       set('Envoi…'); if (btn) btn.disabled = true;
       const sm = detail.summary;
-      const desc = `Séance ${APP} : NP ${r0(sm.np)} W, IF ${fx(sm.IF, 2)}, charge ${r0(sm.tss)}${a.test ? ', FTP mesurée ' + a.test.ftp + ' W' : ''}.`;
+      const so = sm.sources;
+      const desc = `Séance ${APP} : NP ${r0(sm.np)} W, IF ${fx(sm.IF, 2)}, charge ${r0(sm.tss)}${a.test ? ', FTP mesurée ' + a.test.ftp + ' W' : ''}.` + (so && so.n ? ` Puissance ${detail.powerRef === 'pedals' ? 'des pédales Assioma' : 'du KICKR'} (KICKR ${r0(so.kickr)} W, pédales ${r0(so.pedals)} W${so.bal ? ', G/D ' + r0(so.bal) + '/' + r0(100 - so.bal) : ''}).` : '');
       const r = await Strava.upload(FIT.buildFit(detail, sm), { name: a.name, description: desc, externalId: 'd6tri-' + a.id, sportType: S.settings.sportType }, set);
       if (r.activityId) { a.stravaId = r.activityId; upsertAct(a); set('Voir sur Strava'); toast(r.duplicate ? 'Déjà présente sur Strava' : 'Envoyée sur Strava'); }
       else { set('Envoyer vers Strava'); toast('Strava traite encore le fichier : vérifie dans quelques minutes'); }
@@ -6059,6 +6372,7 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     install: async () => { if (S.installPrompt) { S.installPrompt.prompt(); await S.installPrompt.userChoice; S.installPrompt = null; render(); } },
     connTrainer: () => connectTrainer(),
     connCad: () => connectCad(),
+    connPm: () => connectPm(),
     libMin: el => { S.libMinutes = +el.dataset.v; render(); },
     ideaMin: el => { S.ideaMinutes = +el.dataset.v; render(); },
     connHr: () => connectHr(),

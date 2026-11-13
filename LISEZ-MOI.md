@@ -24,6 +24,17 @@ Ton application de triathlon sur téléphone Android : journal de toutes tes act
 - Tu as un capteur de cadence Bluetooth sur la manivelle ? Connecte-le dans Accueil → Home trainer. Il devient prioritaire sur la mesure du KICKR. Il est facultatif.
 - Dans tes propres séances, ajoute `c95` à une étape pour fixer une cadence, par exemple `5x(3m@75 c110, 2m@60 c90)`.
 
+## Pédales Favero Assioma Duo
+
+- **Connexion** : Accueil → Home trainer → Pédales Assioma Duo → Connecter, puis choisis l’appareil dont le nom commence par ASSIOMA. Le KICKR apparaît aussi dans la liste, car il mesure lui aussi la puissance : ne le choisis pas.
+- **Avant de connecter** : fais tourner les manivelles pour réveiller les pédales et ferme l’app Favero Assioma. En Bluetooth, les pédales ne se connectent qu’à un seul appareil à la fois. Ta Forerunner peut rester appairée en ANT+, ça ne gêne pas.
+- **Réglage Favero** : laisse la transmission Bluetooth sur un seul canal, pas « Dual channel L/R ». Sinon l’app ne reçoit que la moitié de la puissance (elle te prévient si elle le détecte).
+- **Pendant la séance** : le grand chiffre est la puissance de référence (les pédales par défaut). En dessous, deux tuiles montrent côte à côte le KICKR (puissance, cadence, résistance réglée) et les pédales (puissance, cadence, équilibre gauche/droite). La tuile encadrée est la référence.
+- **ERG calé sur les pédales** : les pédales lisent souvent quelques watts de plus que le KICKR. L’app apprend cet écart et règle la résistance du KICKR pour que les pédales affichent exactement la cible. Tu peux le désactiver, ou choisir le KICKR comme référence, dans Réglages des pédales.
+- **Si les pédales décrochent** : le KICKR prend le relais automatiquement et la séance continue.
+- **Après la séance** : la fiche compare les deux capteurs (moyennes, écart en %, équilibre gauche/droite), et le graphique trace les deux puissances. Le fichier .FIT envoyé à Strava et Garmin contient la puissance de référence et l’équilibre gauche/droite.
+- **Étalonnage** : les Assioma font leur zéro toutes seules. Le bouton « Étalonner maintenant » force un zéro (pieds hors des pédales, manivelles immobiles).
+
 ## 1. Mise en ligne (une seule fois)
 
 Chrome n'autorise le Bluetooth que sur une adresse https. Le plus simple est GitHub Pages (gratuit) :
