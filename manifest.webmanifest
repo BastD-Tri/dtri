@@ -1,0 +1,33 @@
+{
+ "name": "D Tri Training",
+ "short_name": "D Tri",
+ "id": "./",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "any",
+ "background_color": "#0D1B2E",
+ "theme_color": "#0D1B2E",
+ "lang": "fr",
+ "description": "Journal et plans de triathlon : natation, vélo KICKR, course, renfo, poids et nutrition.",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}
