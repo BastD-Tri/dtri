@@ -4,7 +4,7 @@ Ton application de triathlon sur téléphone Android : journal de toutes tes act
 
 ## Ce que fait l'app
 
-- **Journal** : toutes tes activités au même endroit. Tu peux les saisir à la main, les importer depuis Strava (où arrivent déjà ta Forerunner 255 et tes lunettes FORM), ou depuis des fichiers .FIT/.zip exportés de Garmin Connect. Un fichier de triathlon donne une activité par sport.
+- **Journal** : toutes tes activités au même endroit. Tes activités Garmin Connect arrivent toutes seules (clé API personnelle Garmin), tes nages FORM via intervals.icu ; tu peux aussi les saisir à la main ou importer des fichiers .FIT/.zip exportés de Garmin Connect. Un fichier de triathlon donne une activité par sport.
 - **Vélo** : tes séances KICKR en mode ERG (l'app règle la puissance), avec 55 séances prêtes (dont des séances de cadence et de vélocité), des séances surprise et le ramp test. Envoi direct sur Strava ; fichier .FIT pour Garmin Connect.
 - **Course** : 23 séances (footing, sortie longue, seuil, VMA, côtes, enchaînements, tests) et des séances surprise. Les cibles sont des allures calculées sur ton allure seuil, ou des zones de fréquence cardiaque. Chaque séance s'envoie sur ta montre.
 - **Séances à la durée de ton choix** : sur chaque séance (vélo, course, natation), choisis le temps dont tu disposes (20 à 120 min). L'app recalcule la séance : nombre de répétitions, durée des blocs, échauffement et retour au calme. Une 30/30 VMA de 55 min devient ainsi 10 × 30/30 en 30 min. Dans Séances, le réglage « Temps dont je dispose » adapte toute la liste d'un coup. Les tests gardent leur durée.
@@ -117,7 +117,7 @@ Dans **Séances → Étirements** (ou le bouton « Étirements » de l'accueil) 
   - Tes réglages sont retenus. « Copier dans Mes routines » et « Créer une routine » te permettent de faire les tiennes.
 - **Étirements** (deuxième onglet) : les 28 positions avec leur schéma animé, filtrables par sport, mobilité ou étirements tenus. Chaque fiche donne les muscles, les étapes, le point clé et une version plus douce et plus intense.
 - **Minuteur guidé** : le schéma et le chrono de chaque position, « côté gauche » puis « côté droit » avec 5 s pour changer de côté, la position suivante pendant la transition, des bips à 3-2-1 et des annonces vocales.
-- **Journal** : la routine s'enregistre comme une activité « Étirements » (positions et temps de tenue), avec une charge d'entraînement très faible pour ne pas fausser ta forme et ta fatigue. Elle a son filtre dans le journal, sa ligne dans « Cette semaine » et dans le bilan. Les séances Yoga importées de Strava y sont aussi rangées.
+- **Journal** : la routine s'enregistre comme une activité « Étirements » (positions et temps de tenue), avec une charge d'entraînement très faible pour ne pas fausser ta forme et ta fatigue. Elle a son filtre dans le journal, sa ligne dans « Cette semaine » et dans le bilan. Les séances de yoga et de mobilité importées (Garmin, intervals.icu, Strava) y sont aussi rangées.
 
 ## Plan : étirements et repères
 
@@ -147,7 +147,7 @@ Dans **Séances → Étirements** (ou le bouton « Étirements » de l'accueil) 
 **Séances** :
 - **Vélo → VTT** : 6 séances pour le KICKR, construites sur ce qui fait la différence en VTT. Il y a les relances depuis une cadence basse, les montées raides à 60 tr/min, le single-track en dents de scie, une simulation de course XC, la force en côte et l'endurance avec bosses. La « Surprise » vélo propose aussi « VTT ».
 - **Course → Trail** : 7 séances au cardio (en côte, l'allure ne veut rien dire) : côtes longues, côtes courtes et raides, montées-descentes techniques, fartlek nature, rando-course (marche rapide en côte), escaliers et sortie longue trail. Elles s'envoient à la montre et se font aussi sur le tapis, qui règle la vitesse au cardio. La « Surprise » course propose « Trail » et « Sortie longue trail ».
-- **Journal** : à la saisie, un vélo peut être « Route », « VTT » ou « Home trainer », et une course « Route », « Trail » ou « Tapis ». Les sorties VTT et trail importées de Strava sont reconnues.
+- **Journal** : à la saisie, un vélo peut être « Route », « VTT » ou « Home trainer », et une course « Route », « Trail » ou « Tapis ». Les sorties VTT, trail et tapis importées (Garmin, intervals.icu, Strava) sont reconnues.
 
 **Plans** (onglet Plan, trois familles) :
 - **Triathlon**, avec les distances classiques et trois **cross triathlons** :
@@ -187,13 +187,20 @@ Au premier lancement, renseigne tes repères (tu pourras les affiner avec les te
 - **CSS** natation (test 400 m + 200 m, calcul automatique dans le profil) ;
 - FC max, et ton niveau dans chaque sport.
 
-## 3. Récupérer toutes tes activités (Strava)
+## 3. Récupérer tes activités automatiquement (Garmin Connect)
 
-1. Sur [strava.com/settings/api](https://www.strava.com/settings/api), crée une application. Dans **Authorization Callback Domain**, mets `TON-PSEUDO.github.io`.
-2. Dans l'app : Profil → Strava, colle le **Client ID** et le **Client Secret**, puis **Connecter Strava**. Accepte la lecture et l'envoi d'activités.
-3. Journal → **Strava** : l'app récupère tes 90 derniers jours, puis seulement les nouveautés.
+Depuis octobre 2026, Garmin donne à chaque utilisateur une **clé API personnelle** gratuite, en lecture seule. L'app s'en sert pour importer toute seule les activités de ta Forerunner, avec les courbes (FC, allure, puissance), à chaque ouverture. Garmin ne répond pas aux appels venant directement d'une page web : il faut un petit **relais** gratuit sur Cloudflare, qui ne stocke rien et ne répond qu'à ton app.
 
-Vérifie que l'app FORM partage bien tes nages vers Strava, et que Garmin Connect est relié à Strava.
+1. Sur le site Garmin Connect, ouvre [la page Clé API personnelle](https://connect.garmin.com/app/settings/personalApiToken), crée une clé (durée : 1 an) et copie-la : elle ne s'affiche qu'une fois.
+2. Crée un compte gratuit sur [Cloudflare](https://dash.cloudflare.com), puis **Workers & Pages** → **Create** → Worker « Hello World » → **Deploy**.
+3. Dans l'app : Profil → Montre Garmin → **Copier le code du relais**. Sur Cloudflare, **Edit code**, remplace tout par ce code, puis **Deploy**. Note l'adresse du Worker (`…workers.dev`).
+4. Dans l'app, colle l'adresse du relais et la clé, puis **Tester**.
+
+Ensuite : synchro à chaque ouverture de l'app (au plus toutes les 15 minutes, jamais pendant une séance), bouton **Synchroniser** dans le Journal, et **Récupérer les 90 derniers jours** dans Importer. Un triathlon donne une activité par sport ; une activité que tu supprimes ne revient pas. Garmin t'envoie un e-mail une semaine avant l'expiration de la clé : crée-en une nouvelle et colle-la dans le profil.
+
+**intervals.icu** (si tu l'as configuré pour la montre, voir plus bas) : l'app y lit aussi tes activités. C'est utile pour les **lunettes FORM**, qui envoient leurs nages à intervals.icu mais pas à Garmin. Les activités qu'intervals.icu a reçues de Strava ne sont pas lisibles par son API ; celles de Garmin le sont encore, mais intervals.icu prévoit de les couper. Les doublons entre Garmin et intervals.icu sont détectés (même sport, départ à moins de 3 minutes).
+
+**Strava** : depuis le 30 juin 2026, son API est réservée aux abonnés Strava. Avec un abonnement, la connexion (Profil → Strava) marche toujours ; sans abonnement, utilise la synchro Garmin. Sans aucune connexion, l'import de fichiers .FIT/.zip exportés de Garmin Connect reste possible.
 
 ## 4. Séances sur la Forerunner 255 (intervals.icu)
 
@@ -201,14 +208,14 @@ Garmin ne laisse pas une app personnelle envoyer des séances sur la montre. On 
 
 1. Crée un compte sur [intervals.icu](https://intervals.icu). Dans ses réglages, connecte Garmin Connect et coche **Upload planned workouts**.
 2. Toujours dans ses réglages, section **Developer Settings**, génère une **clé API** et note ton **identifiant d'athlète** (i123456).
-3. Dans l'app : Profil → Montre Garmin, colle-les, puis **Tester la connexion**.
+3. Dans l'app : Profil → intervals.icu, colle-les, puis **Tester la connexion**.
 4. Sur une séance de course ou de natation : **Envoyer à ma montre**, ou depuis le plan : **Envoyer à la montre** (4 semaines d'un coup). Synchronise l'app Garmin Connect : la séance apparaît dans Entraînement → Séances sur la montre.
 
 Choisis dans le profil si les cibles de course sont des **allures** ou des **zones de FC**. Sans intervals.icu, le bouton **Fichier .FIT (USB)** crée une séance à copier par câble dans le dossier `GARMIN/NewFiles` de la montre.
 
 ## 5. Lunettes FORM
 
-- Tes nages remontent dans le journal via Strava.
+- Tes nages remontent dans le journal via intervals.icu : dans l'app FORM, Réglages → Services externes → Intervals.icu, et laisse « Importer aussi mes activités d'intervals.icu » activé dans le profil.
 - Pour nager une séance de l'app avec les lunettes, ouvre sa **Fiche piscine**. Dans l'app FORM, crée une séance à partir d'une photo et photographie la fiche. Autre solution : **Copier le texte** et le coller dans la description d'une séance TrainingPeaks (FORM importe les séances TrainingPeaks).
 
 ## 6. IA (facultatif)

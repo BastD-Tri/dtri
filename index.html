@@ -522,6 +522,7 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
 .ckrow { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 9px 0; color: var(--text); font-size: 14px; line-height: 1.35; }
 .ckrow.on span:last-child { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--ok); }
 .ckrow .check { flex: none; margin-top: 1px; }
+.codebox { min-height: 320px; font-size: 11.5px; white-space: pre; overflow: auto; }
 
 </style>
 </head>
@@ -2526,6 +2527,115 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
       const r = await fetch(ICU + '/athlete/' + this.athlete() + '/events/bulk?upsert=true', { method: 'POST', headers: this.headers(), body: JSON.stringify(events) });
       if (!r.ok) { let m = 'HTTP ' + r.status; try { const j = await r.json(); m = j.error || j.message || m; } catch (e) { /* */ } throw new Error('intervals.icu : ' + m); }
       return r.json().catch(() => []);
+    },
+    // activités terminées entre deux dates locales (AAAA-MM-JJ). Celles venues de Strava n’arrivent que sous forme d’ébauche (_note).
+    async listActivities(oldest, newest) {
+      const r = await fetch(ICU + '/athlete/' + this.athlete() + '/activities?oldest=' + oldest + '&newest=' + newest, { headers: { Authorization: this.headers().Authorization } });
+      if (!r.ok) throw new Error('intervals.icu : ' + (r.status === 401 || r.status === 403 ? 'clé API ou identifiant refusé' : 'HTTP ' + r.status));
+      const j = await r.json();
+      return Array.isArray(j) ? j : [];
+    },
+    // fichier d’origine de l’activité (FIT, parfois compressé) ; null si indisponible
+    async file(id) {
+      try {
+        const r = await fetch(ICU + '/activity/' + encodeURIComponent(id) + '/file', { headers: { Authorization: this.headers().Authorization } });
+        return r.ok ? await r.arrayBuffer() : null;
+      } catch (e) { return null; }
+    }
+  };
+
+  // ------------------------------------------------------------------ Garmin Connect, API personnelle (lecture seule)
+  // Garmin ne renvoie pas d’en-têtes CORS : le navigateur passe par un petit relais (Cloudflare Worker) qui ne stocke rien.
+  const GARMIN_HOST = 'https://personal.connectapi.garmin.com';
+  const TOKEN_PATH = '/personalapitoken-service/personal-api/personal-api-key/token';
+  const jwtExp = t => { try { const p = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); return (JSON.parse(atob(p + '==='.slice((p.length + 3) % 4))).exp || 0) * 1000; } catch (e) { return 0; } };
+  const Garmin = {
+    cfg() { return LS.get('garmin', {}); },
+    save(c) { LS.set('garmin', c); },
+    isConfigured() { const c = this.cfg(); return !!(c.relay && c.apiKey); },
+    base() {
+      let u = String(this.cfg().relay || '').trim().replace(/\/+$/, '');
+      if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
+      return u;
+    },
+    async token(force) {
+      const c = this.cfg();
+      if (!c.relay || !c.apiKey) throw new Error('Garmin : renseigne l’adresse du relais et ta clé API personnelle dans le profil.');
+      if (!force && c.token && c.tokenExp - 5 * 60000 > Date.now()) return c.token;
+      let r;
+      try { r = await fetch(this.base() + TOKEN_PATH, { method: 'POST', headers: { Authorization: 'ApiKey ' + c.apiKey.trim() } }); }
+      catch (e) { throw new Error('Garmin : relais injoignable (vérifie son adresse et ta connexion).'); }
+      const txt = await r.text();
+      if (r.status === 403 && /Origine refus/.test(txt)) throw new Error('Garmin : le relais refuse cette app. Recopie le code du relais depuis le profil puis redéploie-le.');
+      if (!r.ok) throw new Error('Garmin : ' + (r.status === 401 || r.status === 403 ? 'clé API refusée ou expirée (crée-en une nouvelle sur Garmin Connect).' : 'HTTP ' + r.status));
+      let tok = txt.trim();
+      if (tok[0] === '{') { try { const j = JSON.parse(tok); tok = j.access_token || j.accessToken || j.token || ''; } catch (e) { tok = ''; } }
+      tok = tok.replace(/^"|"$/g, '');
+      if (!tok) throw new Error('Garmin : réponse inattendue du service de jeton.');
+      const c2 = this.cfg(); c2.token = tok; c2.tokenExp = jwtExp(tok) || Date.now() + 23 * 3600e3; this.save(c2);
+      return tok;
+    },
+    async get(path, binary) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const tok = await this.token(attempt > 0);
+        let r;
+        try { r = await fetch(this.base() + path, { headers: { Authorization: 'Bearer ' + tok } }); }
+        catch (e) { throw new Error('Garmin : relais injoignable.'); }
+        if (r.status === 401 && attempt === 0) continue;
+        if (!r.ok) throw new Error('Garmin : ' + (r.status === 429 ? 'trop de requêtes, réessaie plus tard.' : 'HTTP ' + r.status));
+        return binary ? r.arrayBuffer() : r.json();
+      }
+    },
+    // activités entre deux dates locales (AAAA-MM-JJ), par pages
+    async listActivities(startDate, endDate, onPage) {
+      const out = [];
+      for (let start = 0, page = 0; page < 20; page++) {
+        const j = await this.get('/activitylist-service/activities/search/activities?start=' + start + '&limit=50&startDate=' + startDate + '&endDate=' + endDate);
+        const list = Array.isArray(j) ? j : (j && (j.activityList || j.activities)) || [];
+        out.push(...list);
+        onPage && onPage(out.length);
+        if (list.length < 50) break;
+        start += list.length;
+      }
+      return out;
+    },
+    // fichier d’origine (zip contenant le .FIT)
+    download(id) { return this.get('/download-service/files/activity/' + encodeURIComponent(id), true); },
+    // code du relais à coller dans un Cloudflare Worker ; seule l’app hébergée sur `origin` peut l’utiliser
+    relayCode(origin) {
+      return `// Relais D Tri Training -> Garmin Connect (API personnelle). Ne stocke rien.
+// Cloudflare : Workers & Pages > Créer > Worker > Modifier le code > coller > Déployer.
+const ALLOWED_ORIGIN = ${JSON.stringify(origin)};
+const GARMIN = '${GARMIN_HOST}';
+const ROUTES = [
+  ['POST', /^\\/personalapitoken-service\\/personal-api\\/personal-api-key\\/token$/],
+  ['GET', /^\\/activitylist-service\\/activities\\/search\\/activities$/],
+  ['GET', /^\\/download-service\\/files\\/activity\\/\\d+$/]
+];
+export default {
+  async fetch(request) {
+    const origin = request.headers.get('Origin') || '';
+    const cors = {
+      'Access-Control-Allow-Origin': origin || ALLOWED_ORIGIN,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Authorization',
+      'Access-Control-Max-Age': '86400',
+      'Vary': 'Origin'
+    };
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    if (origin !== ALLOWED_ORIGIN) return new Response('Origine refusée', { status: 403, headers: cors });
+    const url = new URL(request.url);
+    if (!ROUTES.some(([m, re]) => m === request.method && re.test(url.pathname))) return new Response('Chemin refusé', { status: 404, headers: cors });
+    const r = await fetch(GARMIN + url.pathname + url.search, {
+      method: request.method,
+      headers: { Authorization: request.headers.get('Authorization') || '', Accept: 'application/json, application/zip, */*', 'User-Agent': 'DTriTraining-relay/1.0' }
+    });
+    const headers = new Headers(cors);
+    for (const h of ['Content-Type', 'Content-Disposition']) { const v = r.headers.get(h); if (v) headers.set(h, v); }
+    return new Response(r.body, { status: r.status, headers });
+  }
+};
+`;
     }
   };
 
@@ -2575,7 +2685,7 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
     }
   };
 
-  const api = { LS, Store, Strava, AI, Intervals };
+  const api = { LS, Store, Strava, AI, Intervals, Garmin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.WC = Object.assign(root.WC || {}, { SVC: api });
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -4913,7 +5023,7 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
     RT('et_dos_cycliste', 'Dos et nuque du cycliste', 'velo', 'Pour le dos, la nuque et les épaules après une longue sortie ou une séance sur le KICKR.', { rest: 6 },
       [{ ex: 'et_chat_vache', sec: 45 }, { ex: 'et_enfant', sec: 45 }, { ex: 'et_cobra', sec: 30 }, { ex: 'et_genoux_poitrine', sec: 40 }, { ex: 'et_ouverture', sec: 30 }, { ex: 'et_nuque', sec: 20 }]),
     RT('et_avant_nage', 'Mobilité des épaules avant de nager', 'natation', 'Échauffer les épaules et le dos à sec, juste avant d’entrer dans l’eau. Deux passages.', { rest: 5, rounds: 2, roundRest: 10 },
-      [{ ex: 'et_moulinets', sec: 40 }, { ex: 'et_ouvertures_bras', sec: 30 }, { ex: 'et_chat_vache', sec: 30 }, { ex: 'elastique', sec: 30 }, { ex: 'et_flanc', sec: 15 }]),
+      [{ ex: 'et_moulinets', sec: 40 }, { ex: 'et_ouvertures_bras', sec: 30 }, { ex: 'et_chat_vache', sec: 30 }, { ex: 'elastique', sec: 30 }]),
     RT('et_apres_nage', 'Après la natation', 'natation', 'Épaules, triceps, grand dorsal et chevilles, les zones qui tirent après les longueurs.', {},
       [{ ex: 'et_epaule', sec: 30 }, { ex: 'et_triceps', sec: 30 }, { ex: 'et_pecto', sec: 30 }, { ex: 'et_flanc', sec: 30 }, { ex: 'et_enfant', sec: 45 }, { ex: 'et_assis_talons', sec: 30 }, { ex: 'et_nuque', sec: 20 }]),
     RT('et_triathlon', 'Récupération complète du triathlète', 'recup', 'Tout le corps en un passage : jambes, hanches, dos et épaules.', {},
@@ -5370,6 +5480,76 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
     };
   }
 
+  // ------------------------------------------------------------------ import Garmin Connect (API personnelle)
+  function sportFromGarmin(key) {
+    const k = String(key || '').toLowerCase();
+    if (/transition/.test(k)) return 'skip';
+    if (/multi_?sport|triathlon|duathlon|swimrun/.test(k)) return 'multi';
+    if (/swim/.test(k)) return 'swim';
+    if (/run/.test(k)) return 'run';
+    if (/cycl|bik|ride|bmx/.test(k)) return 'bike';
+    if (/yoga|stretch|mobility|breath/.test(k)) return 'stretch';
+    if (/strength|hiit|cardio|pilates|crossfit|fitness_equipment|boxing/.test(k)) return 'strength';
+    return 'other';
+  }
+  const gTime = s => { if (!s) return NaN; const t = String(s).replace(' ', 'T'); return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : t + 'Z'); };
+  function fromGarmin(a) {
+    const key = (a.activityType && (a.activityType.typeKey || a.activityType.key)) || a.activityTypeKey || '';
+    const sport = a.isMultiSportParent ? 'multi' : sportFromGarmin(key);
+    const k = key.toLowerCase();
+    const sub = sport === 'swim' ? (/open_water/.test(k) ? 'openwater' : 'pool')
+      : sport === 'run' ? (/trail/.test(k) ? 'trail' : /treadmill|indoor|virtual/.test(k) ? 'treadmill' : 'outdoor')
+      : sport === 'bike' ? (/mountain|downhill|enduro/.test(k) ? 'vtt' : /indoor|virtual|trainer/.test(k) ? 'indoor' : 'outdoor') : '';
+    const start = Number.isFinite(gTime(a.startTimeGMT)) ? gTime(a.startTimeGMT) : (a.beginTimestamp || Date.parse(a.startTimeLocal));
+    const cad = a.averageBikingCadenceInRevPerMinute || a.averageRunningCadenceInStepsPerMinute || a.averageSwimCadenceInStrokesPerMinute || 0;
+    const pool = a.poolLength ? (a.poolLength > 100 ? a.poolLength / 100 : a.poolLength) : undefined;
+    return {
+      id: 'gc' + a.activityId, sport, sub, source: 'garmin', garminId: String(a.activityId), garminType: key,
+      name: a.activityName || key.replace(/_/g, ' ') || 'Activité Garmin', startTime: start,
+      summary: {
+        duration: Math.round(a.movingDuration || a.duration || a.elapsedDuration || 0), elapsed: Math.round(a.elapsedDuration || a.duration || 0),
+        distance: a.distance || 0, avgHr: a.averageHR || 0, maxHr: a.maxHR || 0, avgP: a.avgPower || 0, np: a.normPower || 0,
+        elevation: a.elevationGain || 0, avgSpeed: a.averageSpeed || 0, avgCad: Math.round(cad), calories: a.calories || 0
+      },
+      pool, childIds: a.childIds || undefined
+    };
+  }
+
+  // ------------------------------------------------------------------ import intervals.icu (nages FORM, activités Garmin tant qu’il les transmet)
+  function fromIcu(a) {
+    if (!a || a._note || !a.type || a.source === 'STRAVA') return null;
+    const type = a.type, sport = sportFromStrava(type);
+    const start = a.start_date ? Date.parse(a.start_date) : Date.parse(a.start_date_local);
+    if (!Number.isFinite(start)) return null;
+    const sub = sport === 'swim' ? (/OpenWater/.test(type) ? 'openwater' : 'pool')
+      : sport === 'run' ? (type === 'TrailRun' ? 'trail' : (type === 'VirtualRun' || a.trainer) ? 'treadmill' : 'outdoor')
+      : sport === 'bike' ? (/MountainBike/.test(type) ? 'vtt' : (type === 'VirtualRide' || a.trainer) ? 'indoor' : 'outdoor') : '';
+    return {
+      id: 'icu' + a.id, sport, sub, source: 'icu', icuId: String(a.id), icuSource: a.source || '', name: a.name || type,
+      startTime: start, stravaType: type,
+      summary: {
+        duration: Math.round(a.moving_time || a.elapsed_time || 0), elapsed: Math.round(a.elapsed_time || 0), distance: a.distance || 0,
+        avgHr: a.average_heartrate || 0, maxHr: a.max_heartrate || 0, avgP: a.icu_average_watts || a.average_watts || 0, np: a.icu_weighted_avg_watts || a.weighted_average_watts || 0,
+        kj: a.icu_joules ? a.icu_joules / 1000 : 0, elevation: a.total_elevation_gain || 0, avgSpeed: a.average_speed || 0, avgCad: a.average_cadence || 0, calories: a.calories || 0
+      },
+      pool: a.pool_length || undefined, externalId: a.external_id || ''
+    };
+  }
+
+  // octets reçus d’un service : zip (Garmin), gzip (intervals.icu) ou FIT brut → liste de fichiers FIT
+  async function fitsFromBytes(buf, name) {
+    if (!buf) return [];
+    const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+    if (u8.length < 14) return [];
+    if (u8[0] === 0x50 && u8[1] === 0x4B) return (await unzip(u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength))).filter(f => /\.fit$/i.test(f.name));
+    if (u8[0] === 0x1F && u8[1] === 0x8B && typeof DecompressionStream !== 'undefined') {
+      const out = new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+      return fitsFromBytes(out, name);
+    }
+    if (String.fromCharCode(u8[8], u8[9], u8[10], u8[11]) === '.FIT') return [{ name: name || 'activite.fit', data: u8 }];
+    return [];
+  }
+
   // ------------------------------------------------------------------ lecture de fichiers FIT (activités Garmin, FORM…)
   const FSPORT = { 1: 'run', 2: 'bike', 5: 'swim', 4: 'other', 10: 'strength', 11: 'other', 17: 'other', 21: 'bike' };
   const BT = { 0x00: [1, 'u', 0xFF], 0x01: [1, 's', 0x7F], 0x02: [1, 'u', 0xFF], 0x83: [2, 's', 0x7FFF], 0x84: [2, 'u', 0xFFFF], 0x85: [4, 's', 0x7FFFFFFF], 0x86: [4, 'u', 0xFFFFFFFF], 0x07: [1, 'str'], 0x88: [4, 'f'], 0x89: [8, 'd'], 0x0A: [1, 'u', 0], 0x8B: [2, 'u', 0], 0x8C: [4, 'u', 0], 0x0D: [1, 'b', 0xFF], 0x8E: [8, 'u64'], 0x8F: [8, 'u64'], 0x90: [8, 'u64'] };
@@ -5450,7 +5630,7 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
         const spd = r[73] !== undefined ? r[73] / 1000 : r[6] !== undefined ? r[6] / 1000 : undefined;
         samples.push({ t: (r[253] + FIT_EPOCH) * 1000, hr: r[3] || null, c: r[4] !== undefined ? r[4] : null, p: r[7] !== undefined ? r[7] : null, s: spd !== undefined ? spd * 3.6 : null, d: r[5] !== undefined ? r[5] / 100 : null });
       }
-      const sub = s[6] === 17 ? 'pool' : s[6] === 18 ? 'openwater' : s[6] === 6 || s[6] === 58 ? 'indoor' : s[6] === 1 ? 'treadmill' : s[6] === 3 ? 'trail' : '';
+      const sub = s[6] === 17 ? 'pool' : s[6] === 18 ? 'openwater' : s[6] === 6 || s[6] === 58 ? 'indoor' : s[6] === 1 ? 'treadmill' : s[6] === 3 ? 'trail' : sport === 'bike' && (s[6] === 8 || s[6] === 9) ? 'vtt' : '';
       return {
         id: 'fit' + Math.round(start / 1000) + '-' + k, sport, sub, source: 'fit', name: (sport === 'swim' ? (sub === 'openwater' ? 'Natation en eau libre' : 'Natation') : { run: 'Course à pied', bike: 'Vélo', strength: 'Renforcement', other: 'Activité' }[sport]) + (sess.length > 1 ? ' (' + (k + 1) + '/' + sess.length + ')' : ''),
         startTime: start,
@@ -5490,7 +5670,7 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
     return files;
   }
 
-  const api = { SPORTS, FEEL, TAGS, PRODUCTS, nutritionTotals, carbsAdvice, EXERCISES, TEMPLATES, strengthVolume, computeLoad, energy, refresh, monthStats, nutritionInsight, weightTrend, fromStrava, sportFromStrava, decodeFit, activitiesFromFit, unzip };
+  const api = { SPORTS, FEEL, TAGS, PRODUCTS, nutritionTotals, carbsAdvice, EXERCISES, TEMPLATES, strengthVolume, computeLoad, energy, refresh, monthStats, nutritionInsight, weightTrend, fromStrava, sportFromStrava, fromGarmin, sportFromGarmin, fromIcu, fitsFromBytes, decodeFit, activitiesFromFit, unzip };
   if (isNode) module.exports = api;
   else root.WC = Object.assign(root.WC || {}, { J: api });
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -6090,7 +6270,7 @@ Il faut exactement ${nWeeks} semaines.`,
 (function () {
   'use strict';
   const { W, M, FIT, BLE, RUN, SVC, PLAN, SP, J, TRI, AD, TM } = window.WC;
-  const { LS, Store, Strava, AI, Intervals } = SVC;
+  const { LS, Store, Strava, AI, Intervals, Garmin } = SVC;
   const VERSION = '0.9.0';
   const APP = 'D Tri Training';
 
@@ -6149,7 +6329,7 @@ Il faut exactement ${nWeeks} semaines.`,
 
   // ------------------------------------------------------------------ état
   const DEFAULT_PROFILE = { name: '', ftp: 200, weight: 75, hrMax: 185, hrRest: 55, lthr: '', runT: 330, css: 130, pool: 25, levels: { swim: 3, bike: 3, run: 3 }, years: '', hours: 7 };
-  const DEFAULT_SETTINGS = { trainerHint: '6AE5', autoPause: true, beeps: true, voice: true, vibrate: true, scaleToLevel: true, sportType: 'VirtualRide', autoStrava: false, step: 0.02, runTarget: 'pace', powerSrc: 'pedals', powerMatch: true, hasPedals: false, tmControl: true, tmMax: 14, hasTreadmill: false, tmPresets: [4, 8, 10, 12, 14] };
+  const DEFAULT_SETTINGS = { trainerHint: '6AE5', autoPause: true, beeps: true, voice: true, vibrate: true, scaleToLevel: true, sportType: 'VirtualRide', autoStrava: false, step: 0.02, runTarget: 'pace', powerSrc: 'pedals', powerMatch: true, hasPedals: false, tmControl: true, tmMax: 14, hasTreadmill: false, tmPresets: [4, 8, 10, 12, 14], autoSync: true, icuImport: true };
   const now = new Date();
   const S = {
     profile: LS.get('profile', null),
@@ -6205,6 +6385,8 @@ Il faut exactement ${nWeeks} semaines.`,
   async function deleteActivity(id) {
     const a = S.acts.find(x => x.id === id);
     if (a && a.hasDetail) await Store.deleteSession(id).catch(() => {});
+    // une activité synchronisée qu’on supprime ne revient pas à la synchro suivante
+    if (a && (a.garminId || a.icuId)) LS.set('syncIgnore', (LS.get('syncIgnore', []) || []).concat(a.garminId ? 'g' + a.garminId : 'i' + a.icuId).slice(-500));
     S.acts = S.acts.filter(x => x.id !== id); saveActs();
     if (S.plan) S.plan.weeks.forEach(w => w.sessions.forEach(s => { if (s.activityId === id) { s.done = false; delete s.activityId; } })); savePlan();
   }
@@ -8110,10 +8292,10 @@ Il faut exactement ${nWeeks} semaines.`,
   }
   function viewJournal() {
     let html = topbar('Journal', S.acts.length + ' activités');
-    html += `<div class="btn-row" style="margin-bottom:12px"><button class="btn primary" data-act="quick" data-v="log">${IC.plus} Ajouter</button><button class="btn" data-act="quick" data-v="import">${IC.upload} Importer</button>${Strava.isConnected() ? `<button class="btn" data-act="stravaSync">${IC.sync} Strava</button>` : ''}</div>`;
+    html += `<div class="btn-row" style="margin-bottom:12px"><button class="btn primary" data-act="quick" data-v="log">${IC.plus} Ajouter</button><button class="btn" data-act="quick" data-v="import">${IC.upload} Importer</button>${syncSources(true).length ? `<button class="btn" data-act="syncAll">${IC.sync} Synchroniser</button>` : ''}</div>`;
     html += `<div class="chips" style="margin-bottom:12px">${[['all', 'Tout']].concat(Object.entries(J.SPORTS).map(([k, v]) => [k, v.name])).map(([k, l]) => `<button class="chip ${S.jFilter === k ? 'on' : ''}" data-act="jFilter" data-v="${k}">${k !== 'all' ? `<span class="sw" style="background:${sportColor(k)}"></span>` : ''}${l}</button>`).join('')}</div>`;
     const list = actsSorted().filter(a => S.jFilter === 'all' || a.sport === S.jFilter);
-    if (!list.length) return html + `<div class="card stack"><h2>Ton journal est vide</h2><p class="muted">Ajoute une activité à la main, importe un fichier .FIT de Garmin Connect, ou connecte Strava dans ton profil pour récupérer tes sorties de la montre et des lunettes FORM.</p></div>`;
+    if (!list.length) return html + `<div class="card stack"><h2>Ton journal est vide</h2><p class="muted">Ajoute une activité à la main, importe un fichier .FIT de Garmin Connect, ou active la synchro Garmin dans ton profil : tes sorties de la montre arriveront toutes seules.</p></div>`;
     let lastDay = '';
     html += '<div class="card" style="padding:2px 14px">';
     list.slice(0, 300).forEach(a => {
@@ -8151,7 +8333,7 @@ Il faut exactement ${nWeeks} semaines.`,
     if (!a) { toast('Activité introuvable', true); return; }
     const detail = a.hasDetail ? await Store.getSession(id).catch(() => null) : null;
     const p = P(), s = a.summary || {};
-    const src = { kickr: 'Home trainer KICKR', treadmill: 'Tapis de course', strava: 'Importée de Strava', fit: 'Fichier FIT', manual: 'Saisie manuelle' }[a.source] || '';
+    const src = { kickr: 'Home trainer KICKR', treadmill: 'Tapis de course', strava: 'Importée de Strava', garmin: 'Synchronisée depuis Garmin Connect', icu: 'Synchronisée depuis intervals.icu' + (a.icuSource && a.icuSource !== 'UPLOAD' ? ' (' + ({ GARMIN_CONNECT: 'Garmin', FORM: 'FORM' }[a.icuSource] || a.icuSource.toLowerCase()) + ')' : ''), fit: 'Fichier FIT', manual: 'Saisie manuelle' }[a.source] || '';
     const stat = (v, l) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`;
     let stats = [stat(W.fmtDur(s.duration || 0, true), 'durée')];
     if (a.sport === 'bike') stats.push(stat(r0(s.avgP) || '–', 'W moy.'), stat(r0(s.np) || '–', 'NP'), stat(s.IF ? fx(s.IF, 2) : '–', 'IF'), stat(s.kj ? r0(s.kj) : '–', 'kJ'));
@@ -8183,7 +8365,7 @@ Il faut exactement ${nWeeks} semaines.`,
       ${kickr || tread ? `<h3 style="margin:18px 0 8px">Exporter</h3>
         <div class="btn-row"><button class="btn primary" data-k="strava" id="s-strava">${a.stravaId ? 'Voir sur Strava' : 'Envoyer vers Strava'}</button><button class="btn" data-k="garmin">Garmin Connect</button></div>
         <div class="btn-row" style="margin-top:8px"><button class="btn sm" data-k="fit">Fichier .FIT</button><button class="btn sm" data-k="tcx">Fichier .TCX</button>${navigator.share ? '<button class="btn sm" data-k="share">Partager</button>' : ''}</div>` : ''}
-      ${a.stravaId && !kickr && !tread ? `<div class="btn-row" style="margin-top:14px"><button class="btn sm" data-k="strava">Voir sur Strava</button></div>` : ''}
+      ${(a.stravaId || a.garminId) && !kickr && !tread ? `<div class="btn-row" style="margin-top:14px">${a.garminId ? '<button class="btn sm" data-k="gcview">Voir sur Garmin Connect</button>' : ''}${a.stravaId ? '<button class="btn sm" data-k="strava">Voir sur Strava</button>' : ''}</div>` : ''}
       ${AI.available() ? `<button class="btn block" style="margin-top:14px" data-k="ai">${IC.spark} Analyse par l’IA</button><div id="s-ai" class="small" style="margin-top:10px;white-space:pre-wrap"></div>` : ''}
       ${lapRows.length > 1 ? `<h3 style="margin:16px 0 6px">Intervalles</h3><table class="laps"><tr><th>Étape</th><th>Durée</th><th>Cible</th><th>Réalisé</th><th>rpm</th><th>FC</th></tr>${lapRows.map(l => `<tr><td class="ellipsis" style="max-width:120px">${esc(l.label || { warmup: 'Échauffement', cooldown: 'Retour au calme', rest: 'Récup', active: 'Effort' }[l.intensity] || '')}</td><td>${W.fmtDur(l.n, true)}</td><td>${l.avgTarget ? r0(l.avgTarget) : '–'}</td><td><b>${r0(l.avgP)}</b></td><td>${cadCell(l)}</td><td>${l.avgHr ? r0(l.avgHr) : '–'}</td></tr>`).join('')}</table>` : ''}
       <div class="btn-row" style="margin-top:18px">${a.source !== 'kickr' && a.source !== 'treadmill' ? '<button class="btn" data-k="edit">Modifier</button>' : ''}<button class="btn danger" data-k="del">Supprimer</button>${opts.fresh ? '<button class="btn primary" data-k="close">Terminé</button>' : ''}</div>`);
@@ -8209,7 +8391,8 @@ Il faut exactement ${nWeeks} semaines.`,
         download(FIT.buildFit(detail, detail.summary), fname + '.fit', 'application/vnd.ant.fit');
         const go = await ask('Importer dans Garmin Connect', 'Le fichier ' + fname + '.fit vient d’être téléchargé. Sur la page Garmin, touche « Parcourir », choisis-le dans Téléchargements, puis « Importer les données ».', [{ label: 'Ouvrir Garmin Connect', value: 1, cls: 'primary' }, { label: 'Plus tard', value: 0 }]);
         if (go) window.open('https://connect.garmin.com/modern/import-data', '_blank', 'noopener');
-      } else if (k === 'strava') {
+      } else if (k === 'gcview') window.open('https://connect.garmin.com/modern/activity/' + a.garminId, '_blank', 'noopener');
+      else if (k === 'strava') {
         if (a.stravaId) { window.open('https://www.strava.com/activities/' + a.stravaId, '_blank', 'noopener'); return; }
         if (!Strava.isConnected()) { const v = await ask('Strava n’est pas connecté', 'Configure Strava une fois dans ton profil, ensuite l’envoi se fait en un geste.', [{ label: 'Aller au profil', value: 1, cls: 'primary' }, { label: 'Annuler', value: 0 }]); if (v) { closeAllSheets(); S.view = 'profile'; render(); } return; }
         await uploadStrava(a, detail, b);
@@ -8486,18 +8669,24 @@ Il faut exactement ${nWeeks} semaines.`,
 
   // ------------------------------------------------------------------ import
   function openImport() {
-    const sc = Strava.cfg();
+    const sc = Strava.cfg(), src = syncSources(), last = lastSyncTime();
     const sh = openSheet(`<h2>Importer des activités</h2>
-      <div class="card stack" style="background:var(--surface2);margin-top:10px"><h3>Depuis Strava</h3><p class="small muted">Ta Forerunner 255 et tes lunettes FORM envoient déjà leurs séances vers Strava : une synchronisation récupère tout d’un coup.</p>
-        ${Strava.isConnected() ? (Strava.hasRead() ? `<button class="btn primary block" data-i="strava">${IC.sync} Synchroniser maintenant</button>` : `<p class="small">L’autorisation de lecture manque : reconnecte Strava.</p><button class="btn block" data-i="reauth">Reconnecter Strava</button>`) : `<button class="btn block" data-i="profile">Configurer Strava</button>`}
-        ${sc.lastSync ? `<p class="small muted">Dernière synchronisation : ${fmtDate(sc.lastSync, { day: 'numeric', month: 'short' })} à ${fmtTime(sc.lastSync)}</p>` : ''}</div>
+      <div class="card stack" style="background:var(--surface2);margin-top:10px"><h3>Montre Garmin et lunettes FORM</h3>
+        <p class="small muted">${src.length ? 'Synchro automatique à chaque ouverture de l’app' + (src.includes('garmin') ? ' depuis Garmin Connect' : '') + (src.includes('icu') ? (src.includes('garmin') ? ' et' : ' depuis') + ' intervals.icu' : '') + '.' : 'Branche la clé API personnelle de Garmin Connect (gratuite) : tes activités arrivent ensuite toutes seules, avec les courbes de la montre.'}</p>
+        ${src.length ? `<button class="btn primary block" data-i="sync">${IC.sync} Synchroniser maintenant</button><button class="btn block" data-i="hist">Récupérer les 90 derniers jours</button>` : `<button class="btn primary block" data-i="garmin">Configurer la synchro Garmin</button>`}
+        ${last ? `<p class="small muted">Dernière synchronisation : ${fmtDate(last, { day: 'numeric', month: 'short' })} à ${fmtTime(last)}</p>` : ''}</div>
+      ${Strava.isConnected() ? `<div class="card stack" style="background:var(--surface2);margin-top:10px"><h3>Depuis Strava</h3><p class="small muted">L’API Strava est réservée aux abonnés Strava depuis le 30 juin 2026.</p>
+        ${Strava.hasRead() ? `<button class="btn block" data-i="strava">${IC.sync} Synchroniser Strava</button>` : `<p class="small">L’autorisation de lecture manque : reconnecte Strava.</p><button class="btn block" data-i="reauth">Reconnecter Strava</button>`}
+        ${sc.lastSync ? `<p class="small muted">Dernière synchronisation : ${fmtDate(sc.lastSync, { day: 'numeric', month: 'short' })} à ${fmtTime(sc.lastSync)}</p>` : ''}</div>` : ''}
       <div class="card stack" style="background:var(--surface2);margin-top:10px"><h3>Fichiers .FIT ou .zip</h3><p class="small muted">Sur Garmin Connect, ouvre une activité, menu ⚙ → « Exporter le fichier d’origine ». Un fichier triathlon donne une activité par sport.</p>
         <label class="btn block" style="cursor:pointer">${IC.upload} Choisir des fichiers<input type="file" id="i-file" accept=".fit,.zip,application/zip,application/octet-stream" multiple hidden></label><div id="i-res" class="small"></div></div>`);
     sh.addEventListener('click', e => {
       const b = e.target.closest('[data-i]'); if (!b) return;
-      if (b.dataset.i === 'strava') { closeSheet(); syncStrava(); }
+      if (b.dataset.i === 'sync') { closeSheet(); syncAll(); }
+      else if (b.dataset.i === 'hist') { closeSheet(); syncAll({ days: 90 }); }
+      else if (b.dataset.i === 'strava') { closeSheet(); syncStrava(); }
       else if (b.dataset.i === 'reauth') { try { Strava.authorize(); } catch (err) { toast(err.message, true); } }
-      else { closeAllSheets(); S.view = 'profile'; render(); }
+      else goProfileCard('garmin-card');
     });
     $('#i-file', sh).addEventListener('change', async e => {
       const res = $('#i-res', sh); res.textContent = 'Lecture…';
@@ -8518,26 +8707,119 @@ Il faut exactement ${nWeeks} semaines.`,
       render();
     });
   }
+  function goProfileCard(id) {
+    closeAllSheets(); S.view = 'profile'; render();
+    setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 100);
+  }
+
+  // ------------------------------------------------------------------ synchro automatique : Garmin Connect (API personnelle) et intervals.icu (FORM…)
+  const icuImportOn = () => Intervals.isConfigured() && S.settings.icuImport !== false;
+  // Strava seulement à la demande : son API exige désormais un abonnement, inutile de la solliciter à chaque ouverture
+  const syncSources = manual => [Garmin.isConfigured() && 'garmin', icuImportOn() && 'icu', manual && Strava.hasRead() && 'strava'].filter(Boolean);
+  const lastSyncTime = () => Math.max(Garmin.isConfigured() ? Garmin.cfg().lastSync || 0 : 0, icuImportOn() ? Intervals.cfg().lastSync || 0 : 0);
+  const ignored = key => (LS.get('syncIgnore', []) || []).includes(key);
+  // complète l’activité avec le fichier d’origine (courbes FC, allure, puissance) ; un multisport donne une activité par sport
+  async function withFit(meta, bytes) {
+    let acts = [];
+    try { for (const f of await J.fitsFromBytes(bytes, meta.id + '.fit')) acts.push(...J.activitiesFromFit(f.data, f.name)); } catch (e) { console.warn('FIT', meta.id, e); acts = []; }
+    if (!acts.length) return meta.sport === 'multi' || meta.sport === 'skip' ? [] : [meta];
+    const tag = a => Object.assign(a, { source: meta.source, garminId: meta.garminId, icuId: meta.icuId, icuSource: meta.icuSource });
+    if (acts.length === 1) {
+      const a = tag(acts[0]), m = meta.summary, s = a.summary;
+      Object.keys(m).forEach(k => { if (!s[k] && m[k]) s[k] = m[k]; });
+      const keep = meta.sport !== 'other' && meta.sport !== 'multi';
+      return [Object.assign(a, { id: meta.id, name: meta.name, sport: keep ? meta.sport : a.sport, sub: (keep && meta.sub) || a.sub, pool: a.pool || meta.pool })];
+    }
+    return acts.map((a, k) => Object.assign(tag(a), { id: meta.id + '-' + k, name: meta.name + ' · ' + sportName(a.sport) }));
+  }
+  async function importFrom(list, kind, res, fetchFile) {
+    let maxStart = 0;
+    for (const meta of list) {
+      maxStart = Math.max(maxStart, meta.startTime);
+      const ref = kind === 'garmin' ? meta.garminId : meta.icuId, key = (kind === 'garmin' ? 'g' : 'i') + ref;
+      if (ignored(key) || S.acts.some(x => (kind === 'garmin' ? x.garminId : x.icuId) === ref || x.id === meta.id || x.id.startsWith(meta.id + '-'))) continue;
+      const d = meta.sport !== 'multi' && findDuplicate(meta);
+      if (d) { if (kind === 'garmin' && !d.garminId) { d.garminId = ref; upsertAct(d); res.linked++; } else if (kind === 'icu' && !d.icuId) { d.icuId = ref; upsertAct(d); res.linked++; } continue; }
+      const bytes = await fetchFile(meta).catch(() => null);
+      for (const a of await withFit(meta, bytes)) {
+        if (findDuplicate(a)) continue;
+        const detail = a.detail; await saveActivity(a, detail); autoLinkPlan(a); res.added++; res.names.push(a.name);
+      }
+    }
+    return maxStart;
+  }
+  async function syncGarmin(res, opts) {
+    const c = Garmin.cfg();
+    const from = opts.days ? Date.now() - opts.days * 864e5 : c.lastStart ? c.lastStart - 864e5 : Date.now() - 30 * 864e5;
+    const raw = await Garmin.listActivities(isoDay(from), isoDay(Date.now() + 864e5));
+    const list = raw.map(J.fromGarmin).filter(m => m.sport !== 'skip' && Number.isFinite(m.startTime))
+      .sort((a, b) => a.startTime - b.startTime || (b.sport === 'multi') - (a.sport === 'multi'));
+    const maxStart = await importFrom(list, 'garmin', res, m => Garmin.download(m.garminId));
+    const c2 = Garmin.cfg(); c2.lastStart = Math.max(c2.lastStart || 0, maxStart); c2.lastSync = Date.now(); Garmin.save(c2);
+  }
+  async function syncIcu(res, opts) {
+    const c = Intervals.cfg();
+    const from = opts.days ? Date.now() - opts.days * 864e5 : c.lastStart ? c.lastStart - 864e5 : Date.now() - 30 * 864e5;
+    const raw = await Intervals.listActivities(isoDay(from), isoDay(Date.now() + 864e5));
+    res.stubs += raw.filter(a => a && a._note).length;
+    const list = raw.map(J.fromIcu).filter(Boolean).sort((a, b) => a.startTime - b.startTime);
+    const maxStart = await importFrom(list, 'icu', res, m => Intervals.file(m.icuId));
+    const c2 = Intervals.cfg(); c2.lastStart = Math.max(c2.lastStart || 0, maxStart); c2.lastSync = Date.now(); Intervals.save(c2);
+  }
+  let syncing = null; const shownSyncErr = new Set();
+  function syncAll(opts) {
+    opts = opts || {};
+    if (syncing) return syncing;
+    const src = syncSources(!opts.silent);
+    if (!src.length) { if (!opts.silent) goProfileCard('garmin-card'); return Promise.resolve(null); }
+    if (!opts.silent) toast('Synchronisation…');
+    syncing = (async () => {
+      const res = { added: 0, linked: 0, stubs: 0, errors: [], names: [] };
+      if (src.includes('garmin')) await syncGarmin(res, opts).catch(e => res.errors.push(e.message));
+      if (src.includes('icu')) await syncIcu(res, opts).catch(e => res.errors.push(e.message));
+      if (src.includes('strava')) await stravaInto(res).catch(e => res.errors.push(e.message));
+      LS.set('lastAutoSync', Date.now());
+      render();
+      const errs = res.errors.filter(m => !opts.silent || !shownSyncErr.has(m));
+      errs.forEach(m => shownSyncErr.add(m));
+      if (res.added) toast(res.added === 1 ? 'Importée : ' + res.names[0] : res.added + ' activités importées' + (errs.length ? ' · ' + errs.join(' · ') : ''), false);
+      else if (errs.length) toast(errs.join(' · '), true);
+      else if (!opts.silent) toast('Rien de nouveau' + (res.linked ? ' (' + res.linked + ' reliée(s))' : '') + (res.stubs && !src.includes('garmin') ? ' · ' + res.stubs + ' activité(s) venue(s) de Strava illisible(s) via intervals.icu' : ''));
+      return res;
+    })().finally(() => { syncing = null; });
+    return syncing;
+  }
+  // à l’ouverture et au retour dans l’app, au plus toutes les 15 minutes, jamais pendant une séance
+  function autoSync() {
+    if (PREVIEW || S.settings.autoSync === false || !syncSources().length || document.getElementById('player')) return;
+    if (Date.now() - (LS.get('lastAutoSync', 0) || 0) < 15 * 60000) return;
+    LS.set('lastAutoSync', Date.now());
+    syncAll({ silent: true });
+  }
   function findDuplicate(a) {
     return S.acts.find(x => (a.stravaId && x.stravaId === a.stravaId) || x.id === a.id || (x.sport === a.sport && Math.abs(x.startTime - a.startTime) < 3 * 60000));
   }
-  async function syncStrava() {
-    if (!Strava.hasRead()) { toast('Reconnecte Strava pour autoriser la lecture des activités', true); return; }
+  async function stravaInto(res) {
     const c = Strava.cfg();
     const after = c.lastStart ? c.lastStart / 1000 - 3600 : Date.now() / 1000 - 90 * 86400;
+    const list = await Strava.listActivities(after);
+    let maxStart = c.lastStart || 0;
+    for (const raw of list) {
+      const a = J.fromStrava(raw);
+      maxStart = Math.max(maxStart, a.startTime);
+      const d = findDuplicate(a);
+      if (d) { if (!d.stravaId) { d.stravaId = a.stravaId; upsertAct(d); res.linked++; } continue; }
+      await saveActivity(a); autoLinkPlan(a); res.added++; res.names.push(a.name);
+    }
+    const c2 = Strava.cfg(); c2.lastStart = maxStart; c2.lastSync = Date.now(); Strava.save(c2);
+  }
+  async function syncStrava() {
+    if (!Strava.hasRead()) { toast('Reconnecte Strava pour autoriser la lecture des activités', true); return; }
     toast('Synchronisation Strava…');
+    const res = { added: 0, linked: 0, names: [] };
     try {
-      const list = await Strava.listActivities(after);
-      let added = 0, linked = 0, maxStart = c.lastStart || 0;
-      for (const raw of list) {
-        const a = J.fromStrava(raw);
-        maxStart = Math.max(maxStart, a.startTime);
-        const d = findDuplicate(a);
-        if (d) { if (!d.stravaId) { d.stravaId = a.stravaId; upsertAct(d); linked++; } continue; }
-        await saveActivity(a); autoLinkPlan(a); added++;
-      }
-      const c2 = Strava.cfg(); c2.lastStart = maxStart; c2.lastSync = Date.now(); Strava.save(c2);
-      render(); toast(added ? added + ' activité(s) importée(s) de Strava' : 'Rien de nouveau sur Strava' + (linked ? ' (' + linked + ' reliée(s))' : ''));
+      await stravaInto(res);
+      render(); toast(res.added ? res.added + ' activité(s) importée(s) de Strava' : 'Rien de nouveau sur Strava' + (res.linked ? ' (' + res.linked + ' reliée(s))' : ''));
     } catch (e) { toast(e.message, true); }
   }
 
@@ -9214,13 +9496,21 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     html += `<section class="block"><div class="card"><h3>Home trainer et séance KICKR</h3>
       <label class="field" style="margin-top:10px"><span>Nom de mon KICKR</span><input type="text" data-st="trainerHint" value="${esc(s.trainerHint)}"></label>
       ${[['autoPause', 'Pause automatique quand je m’arrête de pédaler'], ['beeps', 'Bips avant chaque changement d’intervalle'], ['voice', 'Annonce vocale des intervalles'], ['vibrate', 'Vibrations'], ['scaleToLevel', 'Adapter les séances vélo à mon niveau']].map(([k, l]) => `<div class="switch"><span>${l}</span><input type="checkbox" data-st="${k}" ${s[k] ? 'checked' : ''}></div>`).join('')}</div></section>`;
-    html += `<section class="block"><div class="card stack"><div class="row between"><h3>Strava</h3>${Strava.isConnected() ? `<span class="small" style="color:var(--ok)">Connecté${sc.athlete ? ' : ' + esc(sc.athlete) : ''}</span>` : '<span class="small muted">Non connecté</span>'}</div>
-      <p class="small muted">Sert à deux choses : envoyer tes séances KICKR, et récupérer toutes tes activités (montre Garmin, lunettes FORM…) dans le journal.</p>
-      ${Strava.isConnected() ? (Strava.hasRead() ? '' : '<div class="notice small">Reconnecte Strava pour autoriser la lecture de tes activités.</div>') : `<p class="small muted">1. Sur <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a>, crée une application. Dans « Authorization Callback Domain », mets <b>${esc(location.hostname || 'ton-domaine')}</b>.<br>2. Copie ici le Client ID et le Client Secret, puis connecte-toi.</p>`}
-      <div class="grid2"><label class="field"><span>Client ID</span><input type="text" inputmode="numeric" data-sv="clientId" value="${esc(sc.clientId || '')}"></label><label class="field"><span>Client Secret</span><input type="password" data-sv="clientSecret" value="${esc(sc.clientSecret || '')}"></label></div>
-      <div class="switch"><span>Envoyer automatiquement mes séances KICKR</span><input type="checkbox" data-st="autoStrava" ${s.autoStrava ? 'checked' : ''}></div>
-      <div class="btn-row">${Strava.isConnected() ? `${Strava.hasRead() ? `<button class="btn" data-act="stravaSync">${IC.sync} Synchroniser</button>` : ''}<button class="btn" data-act="stravaOn">Reconnecter</button><button class="btn danger" data-act="stravaOff">Déconnecter</button>` : '<button class="btn primary block" data-act="stravaOn">Connecter Strava</button>'}</div></div></section>`;
-    html += `<section class="block" id="icu-card"><div class="card stack"><div class="row between"><h3>Montre Garmin (via intervals.icu)</h3>${Intervals.isConfigured() ? '<span class="small" style="color:var(--ok)">Configuré</span>' : ''}</div>
+    const gc = Garmin.cfg();
+    html += `<section class="block" id="garmin-card"><div class="card stack"><div class="row between"><h3>Montre Garmin : synchro automatique</h3>${Garmin.isConfigured() ? '<span class="small" style="color:var(--ok)">Configurée</span>' : ''}</div>
+      <p class="small muted">Tes activités Garmin Connect arrivent toutes seules dans le journal, avec les courbes de la montre (FC, allure, puissance). L’app utilise la clé API personnelle que Garmin donne gratuitement depuis octobre 2026, en lecture seule.</p>
+      <details class="small" ${Garmin.isConfigured() ? '' : 'open'}><summary class="muted">Mise en place (10 minutes, une seule fois)</summary><ol style="padding-left:18px;margin:8px 0">
+        <li>Sur le site Garmin Connect, ouvre la page <a href="https://connect.garmin.com/app/settings/personalApiToken" target="_blank" rel="noopener">Clé API personnelle</a>. Crée une clé, accepte les conditions, choisis 1 an et copie-la : elle ne s’affiche qu’une fois.</li>
+        <li>Garmin refuse les appels venant directement d’une page web : il faut un petit relais gratuit. Crée un compte sur <a href="https://dash.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a>, puis « Workers & Pages » → « Create » → Worker « Hello World » → « Deploy ».</li>
+        <li>Touche « Copier le code du relais », ouvre « Edit code » sur ton Worker, remplace tout par ce code puis « Deploy ». Note son adresse (…workers.dev).</li>
+        <li>Colle l’adresse du relais et ta clé ci-dessous, puis touche « Tester ».</li></ol>
+        <p class="muted">Le relais ne stocke rien et ne répond qu’à cette app. La clé reste sur ton téléphone. Une semaine avant qu’elle expire, Garmin t’envoie un e-mail : crée alors une nouvelle clé et colle-la ici.</p></details>
+      <label class="field"><span>Adresse du relais</span><input type="url" data-gc="relay" value="${esc(gc.relay || '')}" placeholder="https://dtri-garmin.ton-nom.workers.dev" autocomplete="off"></label>
+      <label class="field"><span>Clé API personnelle Garmin</span><input type="password" data-gc="apiKey" value="${esc(gc.apiKey || '')}" autocomplete="off"></label>
+      <div class="switch"><span>Synchroniser à chaque ouverture de l’app</span><input type="checkbox" data-st="autoSync" ${s.autoSync !== false ? 'checked' : ''}></div>
+      <div class="btn-row"><button class="btn" data-act="gcCopy">Copier le code du relais</button>${Garmin.isConfigured() ? `<button class="btn" data-act="gcTest">Tester</button><button class="btn" data-act="syncAll">${IC.sync} Synchroniser</button>` : ''}</div>
+      ${gc.lastSync ? `<p class="small muted">Dernière synchronisation : ${fmtDate(gc.lastSync, { day: 'numeric', month: 'short' })} à ${fmtTime(gc.lastSync)}</p>` : ''}</div></section>`;
+    html += `<section class="block" id="icu-card"><div class="card stack"><div class="row between"><h3>intervals.icu : séances vers la montre</h3>${Intervals.isConfigured() ? '<span class="small" style="color:var(--ok)">Configuré</span>' : ''}</div>
       <p class="small muted">Garmin ne permet pas aux apps personnelles d’envoyer des séances sur la montre. intervals.icu (gratuit) le fait : l’app y dépose tes séances de course et de natation, intervals.icu les transmet à Garmin Connect, puis ta Forerunner 255 les reçoit à la synchronisation.</p>
       <details class="small"><summary class="muted">Mise en place (5 minutes, une seule fois)</summary><ol style="padding-left:18px;margin:8px 0">
         <li>Crée un compte sur <a href="https://intervals.icu" target="_blank" rel="noopener">intervals.icu</a>.</li>
@@ -9229,8 +9519,17 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
         <li>Colle-les ci-dessous puis touche « Tester ».</li></ol></details>
       <div class="grid2"><label class="field"><span>Identifiant d’athlète</span><input type="text" data-ic="athleteId" value="${esc(ic.athleteId || '')}" placeholder="i123456"></label><label class="field"><span>Clé API</span><input type="password" data-ic="apiKey" value="${esc(ic.apiKey || '')}" autocomplete="off"></label></div>
       <div class="chips"><span class="small muted" style="align-self:center">Cibles course :</span><button class="chip ${s.runTarget !== 'hr' ? 'on' : ''}" data-act="runTarget" data-v="pace">Allure</button><button class="chip ${s.runTarget === 'hr' ? 'on' : ''}" data-act="runTarget" data-v="hr">Fréquence cardiaque</button></div>
+      <div class="switch"><span>Importer aussi mes activités d’intervals.icu</span><input type="checkbox" data-st="icuImport" ${s.icuImport !== false ? 'checked' : ''}></div>
+      <p class="small muted">Utile pour tes nages FORM : dans l’app FORM, Réglages → Services externes → Intervals.icu. Les activités qu’intervals.icu reçoit de Strava ne sont pas lisibles par son API. Celles de Garmin le sont encore, mais intervals.icu prévoit de les couper : la synchro Garmin ci-dessus prend le relais, sans doublon.</p>
       ${Intervals.isConfigured() ? '<button class="btn" data-act="icuTest">Tester la connexion</button>' : ''}</div></section>`;
-    html += `<section class="block"><div class="card stack"><h3>Lunettes FORM</h3><p class="small muted">Tes nages arrivent dans le journal via Strava (active le partage Strava dans l’app FORM). Pour nager une séance de l’app avec les lunettes : ouvre sa « Fiche piscine » et photographie-la depuis l’app FORM, ou colle le texte dans une séance TrainingPeaks.</p></div></section>`;
+    html += `<section class="block"><div class="card stack"><div class="row between"><h3>Strava</h3>${Strava.isConnected() ? `<span class="small" style="color:var(--ok)">Connecté${sc.athlete ? ' : ' + esc(sc.athlete) : ''}</span>` : '<span class="small muted">Non connecté</span>'}</div>
+      <div class="notice small">Depuis le 30 juin 2026, Strava réserve son API aux abonnés Strava : sans abonnement, la connexion ne fonctionne plus. La synchro Garmin et intervals.icu ci-dessus la remplacent pour le journal.</div>
+      <p class="small muted">Avec un abonnement : envoi de tes séances KICKR vers Strava et récupération de tes activités.</p>
+      ${Strava.isConnected() ? (Strava.hasRead() ? '' : '<div class="notice small">Reconnecte Strava pour autoriser la lecture de tes activités.</div>') : `<p class="small muted">1. Sur <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">strava.com/settings/api</a>, crée une application. Dans « Authorization Callback Domain », mets <b>${esc(location.hostname || 'ton-domaine')}</b>.<br>2. Copie ici le Client ID et le Client Secret, puis connecte-toi.</p>`}
+      <div class="grid2"><label class="field"><span>Client ID</span><input type="text" inputmode="numeric" data-sv="clientId" value="${esc(sc.clientId || '')}"></label><label class="field"><span>Client Secret</span><input type="password" data-sv="clientSecret" value="${esc(sc.clientSecret || '')}"></label></div>
+      <div class="switch"><span>Envoyer automatiquement mes séances KICKR</span><input type="checkbox" data-st="autoStrava" ${s.autoStrava ? 'checked' : ''}></div>
+      <div class="btn-row">${Strava.isConnected() ? `${Strava.hasRead() ? `<button class="btn" data-act="stravaSync">${IC.sync} Synchroniser</button>` : ''}<button class="btn" data-act="stravaOn">Reconnecter</button><button class="btn danger" data-act="stravaOff">Déconnecter</button>` : '<button class="btn primary block" data-act="stravaOn">Connecter Strava</button>'}</div></div></section>`;
+    html += `<section class="block"><div class="card stack"><h3>Lunettes FORM</h3><p class="small muted">Tes nages arrivent dans le journal via intervals.icu (dans l’app FORM : Réglages → Services externes → Intervals.icu, puis active l’import ci-dessus). Pour nager une séance de l’app avec les lunettes : ouvre sa « Fiche piscine » et photographie-la depuis l’app FORM, ou colle le texte dans une séance TrainingPeaks.</p></div></section>`;
     html += `<section class="block"><div class="card stack"><h3>Intelligence artificielle</h3><p class="small muted">Plans triathlon conçus par l’IA, séance du jour et analyse de tes activités avec ta propre clé API Claude (créée sur <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>). La clé reste sur ton téléphone.</p>
       <label class="field"><span>Clé API</span><input type="password" data-ai="apiKey" value="${esc(ai.apiKey || '')}" placeholder="sk-ant-…" autocomplete="off"></label>
       <label class="field"><span>Modèle</span><select data-ai="model">${[['claude-sonnet-5-5', 'Claude Sonnet 5.5 (recommandé)'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (rapide, économique)'], ['claude-opus-5-5', 'Claude Opus 5.5 (le plus poussé)']].map(([v, l]) => `<option value="${v}" ${ai.model === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -9392,6 +9691,7 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     jFilter: el => { S.jFilter = el.dataset.v; render(); },
     openAct: el => openActivity(el.dataset.id),
     stravaSync: () => syncStrava(),
+    syncAll: () => syncAll(),
     libSport: el => { S.libSport = el.dataset.v; S.libCat = 'all'; render(); },
     libcat: el => { S.libCat = el.dataset.v; render(); if (el.classList.contains('tm-teaser')) { window.scrollTo(0, 0); showChip(); } },
     tmJump: el => { const t = document.getElementById('tm-' + el.dataset.v); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
@@ -9444,6 +9744,21 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
       setProfile({ css }); render(); toast('CSS : ' + SP.fmtPace(css) + ' /100 m');
     },
     runTarget: el => { S.settings.runTarget = el.dataset.v; saveSettings(); render(); },
+    gcCopy: async () => {
+      const code = Garmin.relayCode(location.origin);
+      try { await navigator.clipboard.writeText(code); toast('Code du relais copié : colle-le dans ton Worker Cloudflare'); }
+      catch (e) {
+        const sh = openSheet(`<h2>Code du relais</h2><p class="small muted">Sélectionne tout le texte, copie-le, puis colle-le dans « Edit code » de ton Worker Cloudflare.</p><textarea class="codebox" readonly rows="14">${esc(code)}</textarea>`);
+        const ta = $('textarea', sh); ta.focus(); ta.select();
+      }
+    },
+    gcTest: async () => {
+      try {
+        await Garmin.token(true);
+        const n = (await Garmin.listActivities(isoDay(Date.now() - 7 * 864e5), isoDay(Date.now() + 864e5))).length;
+        toast('Garmin connecté : ' + n + ' activité' + (n > 1 ? 's' : '') + ' ces 7 derniers jours');
+      } catch (e) { toast(e.message, true); }
+    },
     icuTest: async () => { try { const n = await Intervals.test(); toast('intervals.icu connecté : ' + n); } catch (e) { toast(e.message, true); } },
     prodAdd: () => { S.products.push({ id: 'p' + Date.now(), name: 'Nouveau produit', unit: 'unité', kcal: 100, carbs: 25, fluid: 0, sodium: 0, caf: 0 }); saveProducts(); render(); },
     stravaOn: () => { try { Strava.authorize(); } catch (e) { toast(e.message, true); } },
@@ -9473,7 +9788,7 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
       const v = await ask('Tout effacer ?', 'Profil, plan, journal, poids et réglages seront supprimés de ce téléphone.', [{ label: 'Tout effacer', value: 1, cls: 'danger' }, { label: 'Annuler', value: 0 }]);
       if (!v) return;
       for (const a of S.acts) if (a.hasDetail) await Store.deleteSession(a.id).catch(() => {});
-      ['profile', 'settings', 'plan', 'custom', 'favs', 'acts', 'weights', 'products', 'strava', 'ai', 'icu', 'demo'].forEach(k => LS.del(k));
+      ['profile', 'settings', 'plan', 'custom', 'favs', 'acts', 'weights', 'products', 'strava', 'ai', 'icu', 'garmin', 'syncIgnore', 'lastAutoSync', 'demo'].forEach(k => LS.del(k));
       location.reload();
     }
   };
@@ -9498,6 +9813,7 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     if (t.dataset.pace !== undefined) { const v = SP.parsePace(t.value); if (!v) { toast('Format attendu : m:ss', true); return; } setProfile({ [t.dataset.pace]: v }); render(); return; }
     if (t.dataset.st !== undefined) { const k = t.dataset.st; S.settings[k] = t.type === 'checkbox' ? t.checked : (k === 'step' ? +t.value : t.value); saveSettings(); return; }
     if (t.dataset.sv !== undefined) { const c = Strava.cfg(); c[t.dataset.sv] = t.value.trim(); Strava.save(c); return; }
+    if (t.dataset.gc !== undefined) { const c = Garmin.cfg(); c[t.dataset.gc] = t.value.trim(); if (t.dataset.gc === 'apiKey' || t.dataset.gc === 'relay') { delete c.token; delete c.tokenExp; } Garmin.save(c); render(); return; }
     if (t.dataset.ic !== undefined) { const c = Intervals.cfg(); c[t.dataset.ic] = t.value.trim(); Intervals.save(c); if (t.dataset.ic === 'apiKey') render(); return; }
     if (t.dataset.ai !== undefined) { const c = AI.cfg(); c[t.dataset.ai] = t.value.trim(); LS.set('ai', c); if (t.dataset.ai === 'apiKey') render(); return; }
     if (t.dataset.prod !== undefined) { const pr = S.products[+t.dataset.i]; if (!pr) return; const k = t.dataset.prod; pr[k] = k === 'name' ? t.value : +t.value || 0; saveProducts(); return; }
@@ -9530,10 +9846,12 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
       }
     } catch (e) { console.warn(e); }
     if (!S.profile && !sheetStack.length) openOnboarding();
+    autoSync();
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') autoSync(); });
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
   }
   boot();
-  window.D6 = { S, ACT, dev: () => dev, startWorkout, render, openActivity, saveActivity, STR, openCircuit };
+  window.D6 = { S, ACT, dev: () => dev, startWorkout, render, openActivity, saveActivity, STR, openCircuit, syncAll };
 })();
 
 </script>
