@@ -9,10 +9,11 @@ Ton application de triathlon sur téléphone Android : journal de toutes tes act
 - **Course** : 23 séances (footing, sortie longue, seuil, VMA, côtes, enchaînements, tests) et des séances surprise. Les cibles sont des allures calculées sur ton allure seuil, ou des zones de fréquence cardiaque. Chaque séance s'envoie sur ta montre.
 - **Séances à la durée de ton choix** : sur chaque séance (vélo, course, natation), choisis le temps dont tu disposes (20 à 120 min). L'app recalcule la séance : nombre de répétitions, durée des blocs, échauffement et retour au calme. Une 30/30 VMA de 55 min devient ainsi 10 × 30/30 en 30 min. Dans Séances, le réglage « Temps dont je dispose » adapte toute la liste d'un coup. Les tests gardent leur durée.
 - **Natation** : 15 séances (technique, endurance, CSS, vitesse, eau libre, test CSS) calculées sur ta CSS. Chaque séance a une « fiche piscine » à lire au bord du bassin ou à photographier pour les lunettes FORM.
-- **Renfo** : saisie des exercices, séries, répétitions, durées et charges (pompes, tractions, dips, gainage, squats… ou tes propres exercices), avec des modèles tout prêts.
+- **Renfo** : 12 circuits réglables avec minuteur guidé, 33 exercices avec schéma animé et fiche « comment faire », et saisie libre des séries, répétitions, durées et charges.
+- **Étirements** : 8 routines par sport (mobilité avant, étirements après), 28 étirements avec schéma animé, minuteur guidé, et un sport « Étirements » dans le journal.
 - **Ressenti et nutrition** : après chaque activité, tu notes l'effort perçu, tes sensations et des repères (fringale, crampes…), puis ce que tu as mangé et bu (gels, bidons, barres…). L'app calcule glucides par heure, liquides et sodium, compare aux repères usuels selon la durée, et fait le lien entre nutrition et sensations sur tes séances longues.
 - **Poids** : suivi des pesées avec tendance sur 7 jours.
-- **Plan** : plan triathlon S, M, L (70.3) ou XL (Ironman), ou vélo seul. Il tient compte de ta date de course, tes jours libres, tes heures, ton niveau dans chaque sport et ton sport faible. Au programme : périodisation, semaines allégées, enchaînements vélo-course, renfo, tests et affûtage. Tu peux déplacer, changer, ajouter ou retirer des séances, en vue semaine ou mois. Version IA (Claude) en option.
+- **Plan** : plan triathlon S, M, L (70.3) ou XL (Ironman), cross triathlon (VTT + trail), vélo (route ou VTT) ou course à pied (route ou trail). Il tient compte de ta date de course, tes jours libres, tes heures, ton niveau dans chaque sport et ton sport faible. Au programme : périodisation, semaines allégées, enchaînements vélo-course, renfo, tests et affûtage. Tu peux déplacer, changer, ajouter ou retirer des séances, en vue semaine ou mois. Version IA (Claude) en option. Les étirements y sont placés selon tes séances, et le plan a une vue d'ensemble, le prévu face au réalisé, « Alléger cette semaine » et une check-list de la semaine de course.
 - **Bilan** : récapitulatif de chaque mois (heures, distances et charge par sport, calendrier, charge par semaine, forme/fatigue, poids, renfo, nutrition et ressenti).
 
 ## La cadence sur le home trainer
@@ -75,6 +76,94 @@ Les 30 programmes intégrés du Run 100 (manuel, pages 9 à 11) sont dans **Séa
 - **Sur le tapis**, l’app règle la vitesse minute par minute comme la console, mais avec en plus la forme du jour (–10 %, –5 %…), la reprise en main à la console, les annonces vocales et l’enregistrement complet (intervalles, FC, Strava, .FIT). Ils s’envoient aussi à la Forerunner, avec une fenêtre d’allure de ±0,2 km/h autour de chaque palier.
 - **Durée fixe** : ce sont les programmes du fabricant, on ne les raccourcit pas. Choisis un autre numéro de la même famille.
 - **Précision** : les profils ont été relevés sur les graphiques du manuel (paliers d’une minute, à ±0,3 km/h près). Les vitesses max de la famille Endurance correspondent au tableau du manuel, sauf Endurance 2, lue à 7,8 km/h sur le graphique contre 8,4 dans le tableau.
+
+## Renfo : circuits et exercices
+
+Dans **Séances → Renfo** :
+
+- **Circuits** : 12 circuits rangés par objectif. Il y en a pour le corps entier (dont « Mon circuit habituel », un cardio express et un circuit en salle), pour le tronc et le gainage, pour la course (force, prévention, pliométrie douce), pour le vélo et pour la natation.
+- **Tout se règle** dans la fiche d'un circuit :
+  - **l'enchaînement** : en circuit (tous les exercices puis on recommence) ou série par série ;
+  - **la mesure** : en répétitions (avec « Fait » quand tu as fini) ou au temps (même durée pour chaque exercice) ;
+  - **le nombre de tours ou de séries**, **le temps d'effort**, **la récup entre exercices** et **la récup entre tours**, avec – / + ou en touchant la valeur pour la taper (« 45 », « 1:30 ») ;
+  - **les répétitions ou la durée de chaque exercice**, et la charge en kg pour les exercices de salle ;
+  - **les exercices** eux-mêmes : en ajouter, en retirer, changer l'ordre (↑ ↓).
+- La durée estimée se met à jour à chaque réglage. Tes réglages d'un circuit sont retenus pour la prochaine fois (« réglé » sur la carte), et « Revenir au circuit d'origine » les annule. « Copier dans Mes circuits » en fait ton propre circuit, avec le nom que tu veux. « Créer un circuit » part de zéro.
+- **Exercices** : les 33 exercices avec un schéma animé, filtrables par sport ou « sans matériel ». La fiche de chaque exercice donne les muscles travaillés, les étapes, le point clé et une version plus facile et plus dure. Touche un exercice dans un circuit pour voir sa fiche.
+- **Minuteur guidé** (« Démarrer ») :
+  - 10 s pour te mettre en place, puis l'enchaînement est automatique ;
+  - le schéma animé de l'exercice, un grand chrono ou le nombre de répétitions, et le point clé ;
+  - pendant la récup, l'exercice suivant et son schéma, avec « +15 s » si tu as besoin de plus ;
+  - bips à 3-2-1, annonces vocales et vibrations ; les exercices d'un côté puis de l'autre ont un « Change de côté » de 5 s ;
+  - Pause, Passer, et ⏮ pour refaire l'exercice précédent.
+- À la fin, ou si tu t'arrêtes avant, ce qui a été fait s'enregistre dans le journal (exercices, séries, durée), puis tu notes ton ressenti. « Noter sans minuteur » remplit directement la saisie avec le circuit, à ajuster.
+- Les séances de renfo du plan ouvrent le circuit correspondant, avec les mêmes réglages.
+
+## Étirements
+
+Dans **Séances → Étirements** (ou le bouton « Étirements » de l'accueil) :
+
+- **Routines** par sport :
+  - **Course** : « Mobilité avant la course » (balanciers de jambe, talons-fesses, montées de genoux, fentes bras au ciel) et « Après la course » (mollets, ischios, quadriceps, fléchisseurs de hanche, fessiers, côté de la hanche, adducteurs).
+  - **Vélo** : « Après le vélo » (hanches, cuisses, dos, poitrine, nuque) et « Dos et nuque du cycliste ».
+  - **Natation** : « Mobilité des épaules avant de nager » et « Après la natation » (épaules, triceps, pectoraux, grand dorsal, chevilles, nuque).
+  - **Récupération** : « Récupération complète du triathlète » et « Détente du soir ».
+- **Avant l'effort, seulement de la mobilité** : des mouvements doux et amples, jamais d'étirement tenu à froid. Les étirements tenus sont pour après.
+- **Tout se règle** :
+  - **Passages** : la routine une ou plusieurs fois, avec une pause entre deux passages.
+  - **Tenue** : – / + ajoute ou retire 5 s à tous les étirements, et taper une valeur (« 45 ») les met tous à cette durée. Chaque étirement se règle aussi à part.
+  - **Transition** : le temps pour changer de position.
+  - **Les étirements** eux-mêmes : en ajouter, en retirer, changer l'ordre.
+  - Tes réglages sont retenus. « Copier dans Mes routines » et « Créer une routine » te permettent de faire les tiennes.
+- **Étirements** (deuxième onglet) : les 28 positions avec leur schéma animé, filtrables par sport, mobilité ou étirements tenus. Chaque fiche donne les muscles, les étapes, le point clé et une version plus douce et plus intense.
+- **Minuteur guidé** : le schéma et le chrono de chaque position, « côté gauche » puis « côté droit » avec 5 s pour changer de côté, la position suivante pendant la transition, des bips à 3-2-1 et des annonces vocales.
+- **Journal** : la routine s'enregistre comme une activité « Étirements » (positions et temps de tenue), avec une charge d'entraînement très faible pour ne pas fausser ta forme et ta fatigue. Elle a son filtre dans le journal, sa ligne dans « Cette semaine » et dans le bilan. Les séances Yoga importées de Strava y sont aussi rangées.
+
+## Plan : étirements et repères
+
+**Étirements dans le plan** (réglage « Étirements dans le plan » à la création, ou les puces Complet · Léger · Aucun sous la vue d'ensemble d'un plan déjà créé, appliquées à partir d'aujourd'hui) :
+- **Complet** :
+  - « Mobilité des épaules » juste avant chaque séance de natation ;
+  - « Mobilité avant la course » avant les séances clés et les sorties longues de course ;
+  - « Après la course » après les sorties longues et les séances dures de course ;
+  - « Après le vélo » après la sortie longue de vélo, et « Dos et nuque du cycliste » après les séances dures sur le KICKR (2 par semaine au plus) ;
+  - « Récupération complète » après chaque enchaînement vélo-course ;
+  - sur les jours sans séance, « Détente du soir » ou « Récupération complète » (3 jours en semaine de récupération) ;
+  - le jour J, la mobilité du matin, 30 à 45 minutes avant le départ.
+- **Léger** : après les sorties longues et les enchaînements, plus une routine détente par semaine.
+- **Hors heures d'entraînement** : ils n'entrent pas dans les heures, la répartition des sports ni la charge. Dans chaque semaine, ils apparaissent à part (« +59 min d'étirements »), juste avant ou après la séance concernée.
+- **Ils suivent leur séance** : si tu la déplaces, ils se déplacent avec elle ; si tu la retires, ils sont retirés aussi. « + Étirements après » ajoute une routine à n'importe quelle séance, et « Ajouter une séance » propose aussi les routines d'étirements.
+- **Sur l'accueil**, l'étirement du jour a un bouton « Commencer » qui lance le minuteur guidé. Une fois la routine faite, elle est cochée dans le plan.
+
+**Repères ajoutés au plan** :
+- **Vue d'ensemble** : le volume prévu de chaque semaine par sport, coloré par phase. Un trait blanc montre ce que tu as réellement fait, la semaine en cours est encadrée et l'épreuve est marquée d'une étoile. Touche une barre pour ouvrir la semaine.
+- **Chaque semaine** : son objectif (base, développement, spécifique, affûtage, récupération), ses séances clés, et les heures faites face aux heures prévues. Les séances clés, longues et de test sont marquées.
+- **Alléger cette semaine** : en cas de fatigue ou de semaine chargée, les séances qui restent sont raccourcies de 30 % et les séances dures deviennent de l'endurance. Les tests et le renfo ne changent pas.
+- **Compte à rebours** (J−75…) jusqu'à l'épreuve, et à 10 jours de la course, une **check-list de la semaine de course** à cocher : vélo, natation, tenue, nutrition (avec les glucides par heure selon la durée de course), parcours, transitions, sommeil, matin de course.
+- Le suivi affiche aussi le pourcentage de séances passées réalisées et le nombre d'étirements faits.
+
+## VTT, trail et cross triathlon
+
+**Séances** :
+- **Vélo → VTT** : 6 séances pour le KICKR, construites sur ce qui fait la différence en VTT. Il y a les relances depuis une cadence basse, les montées raides à 60 tr/min, le single-track en dents de scie, une simulation de course XC, la force en côte et l'endurance avec bosses. La « Surprise » vélo propose aussi « VTT ».
+- **Course → Trail** : 7 séances au cardio (en côte, l'allure ne veut rien dire) : côtes longues, côtes courtes et raides, montées-descentes techniques, fartlek nature, rando-course (marche rapide en côte), escaliers et sortie longue trail. Elles s'envoient à la montre et se font aussi sur le tapis, qui règle la vitesse au cardio. La « Surprise » course propose « Trail » et « Sortie longue trail ».
+- **Journal** : à la saisie, un vélo peut être « Route », « VTT » ou « Home trainer », et une course « Route », « Trail » ou « Tapis ». Les sorties VTT et trail importées de Strava sont reconnues.
+
+**Plans** (onglet Plan, trois familles) :
+- **Triathlon**, avec les distances classiques et trois **cross triathlons** :
+  - les distances : S (500 m, 10-15 km de VTT, 3-5 km de trail), M (1 km, 20-30 km, 6-10 km) et L / XTERRA (1,5 km, 30-40 km, 10-12 km) ;
+  - côté vélo : sorties longues en VTT avec du dénivelé, une sortie technique VTT par semaine (virages, descentes, franchissements) et des séances VTT sur le KICKR ;
+  - côté course : sorties longues en trail, côtes et descentes ;
+  - les enchaînements deviennent des enchaînements VTT-trail.
+- **Vélo** :
+  - **Vélo de route** : cyclosportive, course sur route, critérium, contre-la-montre, montagne, gravel, FTP, forme.
+  - **VTT** : XC / course de VTT, VTT marathon / raid, enduro / descente, randonnée VTT / forme. Les séances VTT sont sur le KICKR, avec une sortie longue VTT et une sortie technique dehors.
+- **Course à pied** :
+  - **Route** : 5 km, 10 km, semi-marathon, marathon, forme / reprise.
+  - **Trail** : trail court (moins de 30 km), trail long (30-60 km), ultra-trail (plus de 60 km), forme / découverte. Tu peux indiquer le dénivelé de la course : les sorties longues indiquent un D+ à viser.
+  - Le plan prend une sortie longue (jour au choix), une ou deux séances clés espacées, des footings et du renfo en base. Pour le trail long et l'ultra, il ajoute des « week-ends chocs » (une sortie la veille de la sortie longue), et deux semaines d'affûtage avant les longues distances.
+  - Tests de VMA ou de seuil, étirements et check-list de course adaptée (matériel obligatoire en trail, dossard et allure sur route).
+  - Le plan course est conçu par le moteur de l'app ; l'IA reste proposée pour le triathlon et le vélo, y compris le cross triathlon et le VTT.
 
 ## 1. Mise en ligne (une seule fois)
 
