@@ -215,6 +215,8 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
 .p-src .src { background: var(--surface); border-radius: var(--r); padding: 8px 10px 9px; border: 1.5px solid transparent; }
 .p-src .src.ref { border-color: var(--c); }
 .p-src .src.lost { opacity: .55; }
+.p-src .src.half #src-k-c { color: var(--warn, #f2a93b); }
+.p-src .src.half .hd em { color: var(--warn, #f2a93b); }
 .p-src .src.lost .lr { grid-template-columns: 1fr; }
 .p-src .src.lost .lr .bar, .p-src .src.lost #src-p-r { display: none; }
 .p-src .hd { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; }
@@ -241,6 +243,33 @@ table.srccmp td:first-child { color: var(--muted); }
 .startcover .forme { text-align: left; }
 #player.tread .startcover { background: rgba(13,27,46,.97); }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+/* ---------- séances libres ---------- */
+#player.free .f-main { flex: 1; display: flex; flex-direction: column; gap: 10px; min-height: 0; padding-top: 8px; overflow-y: auto; }
+#player.free .p-power { padding: 0; }
+#player.free .p-power .big { font-size: clamp(76px, 27vw, 150px); }
+#player.free.dual .p-power .big { font-size: clamp(66px, 23vw, 130px); }
+.f-seg { flex: none; }
+.f-presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; flex: none; }
+.f-presets button { background: var(--surface); border: 1.5px solid transparent; border-radius: var(--r); padding: 10px 2px 8px; color: var(--text); display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 64px; }
+.f-presets button b { font-family: var(--chrono); font-style: italic; font-weight: 800; font-size: 24px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.f-presets button span { font-size: 11px; color: var(--muted); }
+.f-presets button.on { border-color: var(--accent); background: var(--surface2); }
+.f-presets button:disabled { opacity: .35; }
+.f-presets.ro button { opacity: .6; }
+.f-fine { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; flex: none; }
+.f-fine button { background: var(--surface2); border: 0; border-radius: 10px; color: var(--text); font-weight: 650; font-size: 15px; min-height: 44px; }
+.f-metrics { grid-template-columns: repeat(4, 1fr); flex: none; }
+.f-metrics .m b { font-size: 22px; }
+#player.free .p-chart { flex: 1; min-height: 80px; }
+.f-controls { display: grid; grid-template-columns: 1.5fr 1fr 1.2fr; gap: 8px; margin-top: 10px; }
+.f-controls .btn { min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14.5px; }
+.f-controls .btn svg { width: 18px; height: 18px; }
+.f-count { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; text-align: center; background: rgba(13,27,46,.92); gap: 10px; }
+.f-count b { font-family: var(--chrono); font-style: italic; font-weight: 800; font-size: 120px; line-height: 1; }
+.f-count span { color: var(--muted); font-size: 17px; }
+.f-edit { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.f-edit input { width: 100%; text-align: center; font-size: 16px; padding: 10px 2px; }
+.f-entry { margin: 10px 0 4px; }
 /* ---------- tapis de course ---------- */
 #player.tread .p-power .big { font-size: clamp(84px, 30vw, 170px); }
 #player.tread .t-pace { font-family: var(--chrono); font-style: italic; font-weight: 800; font-size: 30px; margin-top: 6px; font-variant-numeric: tabular-nums; }
@@ -1011,11 +1040,13 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
     const both = seg.filter(s => s.pp > 0 && s.pk > 0);
     const sp = both.reduce((a, s) => a + s.pp, 0), sk = both.reduce((a, s) => a + s.pk, 0);
     const bal = seg.map(s => s.bal).filter(v => v > 0);
+    const cc = seg.filter(s => s.cp > 30 && s.ck > 0);
+    const halfShare = cc.length ? cc.filter(s => Math.abs(2 * s.ck - s.cp) <= Math.max(4, s.cp * 0.06)).length / cc.length : 0;
     return {
       kickr: avg(seg.filter(s => s.pk !== undefined).map(s => s.pk)), pedals: avg(seg.filter(s => s.pp !== undefined).map(s => s.pp)),
       gap: sk ? sp / sk - 1 : 0, n: both.length, bal: bal.length ? avg(bal) : null,
       cadK: avg(seg.map(s => s.ck).filter(v => v > 0)), cadP: avg(seg.map(s => s.cp).filter(v => v > 0)),
-      cover: seg.length ? seg.filter(s => s.pp !== undefined).length / seg.length : 0
+      cover: seg.length ? seg.filter(s => s.pp !== undefined).length / seg.length : 0, halfShare
     };
   }
 
@@ -1876,7 +1907,7 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
       this.total = this.flat.reduce((a, s) => a + s.d, 0);
       this.trainer = opts.trainer; this.hr = opts.hr;
       this.state = 'ready';
-      this.elapsed = 0; this.intensity = 1; this.ergOn = true; this.grade = 0;
+      this.elapsed = 0; this.intensity = 1; this.ergOn = true; this.grade = 0; this.manualW = null;
       this.samples = []; this.laps = []; this.pauses = [];
       this.stepIdx = -1; this.startTime = null; this.distance = 0;
       this._zeroSince = null; this._autoPaused = false; this._lastBeep = null;
@@ -1911,6 +1942,7 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
     get isFree() { const s = this.step; return !this.ergOn || !!(s && s.free); }
 
     targetWatts(atElapsed) {
+      if (this.manualW !== null && this.manualW !== undefined) return Math.round(this.manualW); // séance libre
       const t = atElapsed === undefined ? this.elapsed : atElapsed;
       const i = this._stepAt(t), s = this.flat[i];
       if (!s) return 0;
@@ -2112,6 +2144,14 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
     }
 
     setIntensity(v) { this.intensity = Math.max(0.5, Math.min(1.5, Math.round(v * 1000) / 1000)); this._apply(true); this.emit('intensity', this.intensity); }
+    // séance libre : consigne de puissance choisie à la main, tours à la demande
+    setManual(w) { this.manualW = Math.max(0, Math.min(2000, Math.round(w))); if (!this.ergOn) { this.ergOn = true; this.emit('erg', true); } this._apply(true); this.emit('manual', this.manualW); }
+    lap(label, target) {
+      if (this.state === 'ready' || this.state === 'done') return;
+      const l = this.laps[this.laps.length - 1]; if (l && l.to === null) l.to = this.samples.length;
+      this.laps.push({ from: this.samples.length, to: null, label: label || 'Tour ' + (this.laps.length + 1), intensity: 'active', step: this.stepIdx, target: target !== undefined ? target : (this.isFree ? 0 : this.targetWatts()), c: null });
+      this.emit('lap', this.laps.length);
+    }
     setGrade(g) { this.grade = Math.max(-5, Math.min(15, Math.round(g * 2) / 2)); this._apply(true); }
     toggleErg() { this.ergOn = !this.ergOn; this._apply(true); this.emit('erg', this.ergOn); }
 
@@ -3907,12 +3947,18 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
       this._send(true);
     }
     // ---- bilan
-    summary() {
-      const S = this.samples, n = S.length;
+    summary() { return summaryOf(this.samples, this.prof); }
+    lapSummary(l) {
+      const seg = this.samples.slice(l.from, l.to === null ? undefined : l.to);
+      return lapStats(seg, l, this.samples);
+    }
+  }
+  function summaryOf(S, prof) {
+      const n = S.length;
       const H = S.map(s => s.hr).filter(Boolean), V = S.map(s => s.s);
       const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
       const dist = n ? S[n - 1].d : 0;
-      const w = this.prof.weight || 70;
+      const w = (prof || {}).weight || 70;
       return {
         duration: n, elapsed: n ? Math.round((S[n - 1].t - S[0].t) / 1000) + 1 : 0, distance: dist,
         avgSpeed: n ? dist / n : 0, maxSpeed: V.length ? Math.max(...V) / 3.6 : 0,
@@ -3920,11 +3966,88 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
         calories: Math.round(w * dist / 1000 * 1.0), avgPace: dist > 0 ? n / (dist / 1000) : 0,
         incline: S.some(s => s.inc !== undefined) ? Math.round(avg(S.filter(s => s.inc !== undefined).map(s => s.inc)) * 10) / 10 : undefined
       };
+  }
+
+  // ------------------------------------------------------------------ séance libre sur tapis : la vitesse se pilote depuis le téléphone
+  class FreeTread extends Emitter {
+    // o : { tm, hr, prof, control, maxSpeed }
+    constructor(o) {
+      super();
+      this.o = o; this.tm = o.tm; this.prof = o.prof || {};
+      this.workout = { id: 'free-tread', name: 'Course libre sur tapis', sport: 'run' };
+      this.control = o.control !== false && !!this.tm.canSpeed;
+      this.maxSpeed = Math.min(o.maxSpeed || 99, (this.tm.range && this.tm.range.max) || 99);
+      this.minSpeed = (this.tm.range && this.tm.range.min) || 1;
+      this.state = 'ready'; this.elapsed = 0; this.distance = 0; this.samples = []; this.laps = []; this.pauses = [];
+      this.target = null; this._cmdAt = 0; this._still = 0; this.startTime = null; this._nextSample = 0; this.intensity = 1;
+      this._offStatus = this.tm.on ? this.tm.on('status', st => this._status(st)) : null;
     }
-    lapSummary(l) {
-      const seg = this.samples.slice(l.from, l.to === null ? undefined : l.to);
-      return lapStats(seg, l, this.samples);
+    get belt() { return (this.tm.data && this.tm.data.speed) || 0; }
+    begin() { this.state = 'waiting'; this.emit('state', this.state); this._last = clock.now(); this._timer = setInterval(() => this._tick(), 250); }
+    clampSpeed(v) { return clamp(Math.round(v * 10) / 10, this.minSpeed, this.maxSpeed); }
+    // nouvelle consigne ; si la bande est arrêtée, on la démarre d'abord (appel explicite de l'utilisateur)
+    async setTarget(v, lap) {
+      v = this.clampSpeed(v);
+      if (lap && this.state === 'running' && this.laps.length && this.samples.length - this.laps[this.laps.length - 1].from >= 10) this.lap();
+      this.target = v; this.emit('target', v);
+      if (!this.control) return;
+      if (this.belt < 0.5 && this.tm.start) {
+        await this.tm.start();
+        const t0 = Date.now();
+        while (this.belt < 0.5 && Date.now() - t0 < 6000) await sleep(200);
+      }
+      this._cmdAt = clock.now();
+      await this.tm.setSpeed(v);
+      const l = this.laps[this.laps.length - 1]; if (l && l.to === null && this.samples.length - l.from < 10) l.target = v;
     }
+    nudge(dv) { return this.setTarget((this.target !== null ? this.target : this.belt) + dv); }
+    stopBelt() { if (this.tm.stop) return this.tm.stop(); }
+    lap() {
+      if (this.state !== 'running' && this.state !== 'paused') return;
+      const l = this.laps[this.laps.length - 1]; if (l && l.to === null) l.to = this.samples.length;
+      this.laps.push({ from: this.samples.length, to: null, label: 'Tour ' + (this.laps.length + 1), intensity: 'active', target: this.target });
+      this.emit('lap', this.laps.length);
+    }
+    _status(st) {
+      // changement fait sur la console : la consigne suit
+      if (st.kind === 'targetspeed' && !st.fromApp && clock.now() - this._cmdAt > 1500) { this.target = Math.round(st.speed * 10) / 10; this.emit('console', this.target); }
+      if (st.kind === 'safety') this.emit('safety');
+    }
+    _go() {
+      if (!this.startTime) { this.startTime = clock.now(); this._nextSample = this.startTime; this.laps.push({ from: 0, to: null, label: 'Tour 1', intensity: 'active', target: this.target }); }
+      if (this.target === null) this.target = Math.round(this.belt * 10) / 10;
+      this.state = 'running'; this.emit('state', this.state);
+    }
+    _tick() {
+      const now = clock.now(), dt = Math.min(60, Math.max(0, (now - this._last) / 1000)); this._last = now;
+      const d = this.tm.data || {}, v = d.speed || 0, moving = v >= 0.5;
+      if (this.state === 'waiting') { if (moving) this._go(); this.emit('tick'); return; }
+      if (this.state === 'paused') { if (moving) { this.pauses.push({ from: this._pauseFrom, to: now }); this._go(); this.emit('resumed'); } this.emit('tick'); return; }
+      if (this.state !== 'running') return;
+      if (!moving) { this._still += dt; if (this._still >= 2.5) { this._still = 0; this.state = 'paused'; this._pauseFrom = now; this.emit('state', this.state); this.emit('beltstop'); } this.emit('tick'); return; }
+      this._still = 0;
+      // la bande tourne à une vitesse stable différente de la consigne (console sans notification) : on suit
+      if (this.target !== null && Math.abs(v - this.target) > 0.3 && clock.now() - this._cmdAt > (Math.abs(v - this.target) / 0.5 + 6) * 1000) {
+        if (this._lastV !== undefined && Math.abs(v - this._lastV) < 0.05) { this._stable = (this._stable || 0) + dt; if (this._stable > 4) { this.target = Math.round(v * 10) / 10; this._stable = 0; this.emit('console', this.target); } }
+      } else this._stable = 0;
+      this._lastV = v;
+      let dd = v / 3.6 * dt;
+      if (d.dist !== null && d.dist !== undefined && this._lastDist !== undefined) { const td = d.dist - this._lastDist; if (td >= 0 && td <= dd * 1.6 + 1.5) dd = td; }
+      this._lastDist = d.dist;
+      let rem = dt, tcur = now - dt * 1000;
+      while (rem > 1e-6) {
+        const sub = Math.min(1, rem); rem -= sub; tcur += sub * 1000;
+        this.elapsed += sub; this.distance += dt > 0 ? dd * sub / dt : 0;
+        while (this._nextSample <= tcur) {
+          this.samples.push({ t: this._nextSample, s: Math.round(v * 100) / 100, d: Math.round(this.distance * 10) / 10, hr: this._hr(), tg: this.target, inc: d.incline !== null && d.incline !== undefined ? d.incline : undefined });
+          this._nextSample += 1000;
+        }
+      }
+      this.emit('tick');
+    }
+    _hr() { const h = this.o.hr; if (h && h.state === 'connected' && h.bpm && (!h.ts || Date.now() - h.ts < 5000)) return h.bpm; const d = this.tm.data || {}; return d.hr || null; }
+    summary() { return summaryOf(this.samples, this.prof); }
+    stop() { clearInterval(this._timer); const l = this.laps[this.laps.length - 1]; if (l && l.to === null) l.to = this.samples.length; this.state = 'done'; if (this._offStatus) this._offStatus(); }
   }
   function lapStats(seg, l, all) {
     if (!seg.length) return null;
@@ -3934,7 +4057,7 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
     return { n: seg.length, dist, pace: dist > 0 ? seg.length / (dist / 1000) : 0, avgSpeed: dist / seg.length * 3.6, avgHr: H.length ? H.reduce((a, b) => a + b, 0) / H.length : 0, target: l.target, label: l.label, intensity: l.intensity };
   }
 
-  const api = { Treadmill, SimTreadmill, TreadRunner, parseTreadmillData, parseStatus, stepSpeed, lapStats, fmtKmh };
+  const api = { Treadmill, SimTreadmill, TreadRunner, FreeTread, parseTreadmillData, parseStatus, stepSpeed, lapStats, summaryOf, fmtKmh };
   if (isNode) module.exports = api;
   else root.WC = Object.assign(root.WC || {}, { TM: api });
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -4633,6 +4756,7 @@ Il faut exactement ${nWeeks} semaines.`,
     strength: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/></svg>',
     other: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
     scale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 9a5 5 0 018 0M12 9l1.5-2"/></svg>',
+    flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg>',
     tread: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h15.5a2.5 2.5 0 0 0 0-5H16"/><path d="M16 12l-3-7h-2"/><circle cx="6" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>',
     pedal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="6.5" width="12" height="11" rx="3"/><path d="M2.5 12H9M15 6.5v11"/></svg>',
     cad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 12l4.5-4.5M17 17h3"/></svg>',
@@ -4659,7 +4783,7 @@ Il faut exactement ${nWeeks} semaines.`,
 
   // ------------------------------------------------------------------ état
   const DEFAULT_PROFILE = { name: '', ftp: 200, weight: 75, hrMax: 185, hrRest: 55, lthr: '', runT: 330, css: 130, pool: 25, levels: { swim: 3, bike: 3, run: 3 }, years: '', hours: 7 };
-  const DEFAULT_SETTINGS = { trainerHint: '6AE5', autoPause: true, beeps: true, voice: true, vibrate: true, scaleToLevel: true, sportType: 'VirtualRide', autoStrava: false, step: 0.02, runTarget: 'pace', powerSrc: 'pedals', powerMatch: true, hasPedals: false, tmControl: true, tmMax: 14, hasTreadmill: false };
+  const DEFAULT_SETTINGS = { trainerHint: '6AE5', autoPause: true, beeps: true, voice: true, vibrate: true, scaleToLevel: true, sportType: 'VirtualRide', autoStrava: false, step: 0.02, runTarget: 'pace', powerSrc: 'pedals', powerMatch: true, hasPedals: false, tmControl: true, tmMax: 14, hasTreadmill: false, tmPresets: [4, 8, 10, 12, 14] };
   const now = new Date();
   const S = {
     profile: LS.get('profile', null),
@@ -5495,7 +5619,7 @@ Il faut exactement ${nWeeks} semaines.`,
   // lecteur : les deux sources côte à côte
   function sourcesHTML() {
     return `<div class="p-src" id="p-src" hidden>
-      <div class="src" id="src-k" style="--c:${SRC_COL.trainer}"><div class="hd"><i></i>KICKR<em id="src-k-ref"></em></div><div class="vals"><b id="src-k-w">–</b><small>W</small><b id="src-k-c">–</b><small>rpm</small></div><div class="ft" id="src-k-ft"></div></div>
+      <div class="src" id="src-k" style="--c:${SRC_COL.trainer}"><div class="hd"><i></i>KICKR<em id="src-k-ref"></em></div><div class="vals"><b id="src-k-w">–</b><small>W</small><b id="src-k-c">–</b><small>rpm est.</small></div><div class="ft" id="src-k-ft"></div></div>
       <div class="src" id="src-p" style="--c:${SRC_COL.pedals}"><div class="hd"><i></i>${esc(pmLabel())}<em id="src-p-ref"></em></div><div class="vals"><b id="src-p-w">–</b><small>W</small><b id="src-p-c">–</b><small>rpm</small></div><div class="ft"><div class="lr"><span id="src-p-l">G –</span><span class="bar"><span id="src-p-bar"></span></span><span id="src-p-r">D –</span></div></div></div>
     </div>`;
   }
@@ -5506,9 +5630,15 @@ Il faut exactement ${nWeeks} semaines.`,
     if (!has) return;
     const pm = run.pmData(), d = dev.trainer.data || {}, refP = run.refSource === 'pedals';
     set('src-k-w', String(r0(d.power))); set('src-k-c', String(r0(d.cadence)));
-    set('src-k-ref', refP ? '' : 'référence'); set('src-p-ref', refP ? 'référence' : '');
+    // la cadence du KICKR est une estimation : quand elle vaut la moitié de celle des pédales, on le signale
+    // (hystérésis d'environ 2 s pour éviter le clignotement)
+    const half = pm && pm.cad > 30 && d.cadence > 0 && Math.abs(2 * d.cadence - pm.cad) <= Math.max(4, pm.cad * 0.06);
+    run._halfK = Math.max(0, Math.min(12, (run._halfK || 0) + (half ? 1 : -1)));
+    const showHalf = run._halfK >= 6;
+    $('#src-k').classList.toggle('half', showHalf);
+    set('src-k-ref', refP ? (showHalf ? 'cadence ≈ ½' : '') : 'référence'); set('src-p-ref', refP ? 'référence' : '');
     $('#src-k').classList.toggle('ref', !refP); $('#src-p').classList.toggle('ref', refP);
-    set('src-k-ft', run.isFree ? 'mode libre' : `résistance réglée à ${r0(run.ergCommand())} W`);
+    set('src-k-ft', run.isFree ? (run.manualW !== null && run.manualW !== undefined ? `pente ${fx(run.grade, 1)} %` : 'mode libre') : `résistance réglée à ${r0(run.ergCommand())} W`);
     $('#src-p').classList.toggle('lost', !pm);
     set('src-p-w', pm ? String(r0(pm.power)) : '–'); set('src-p-c', pm ? String(r0(pm.cad)) : '–');
     const bal = pm && pm.bal;
@@ -5527,9 +5657,10 @@ Il faut exactement ${nWeeks} semaines.`,
     return `<h3 style="margin:18px 0 6px">KICKR et pédales</h3>
       <table class="laps srccmp"><tr><th></th><th><span class="sw" style="background:${SRC_COL.trainer}"></span>KICKR</th><th><span class="sw" style="background:${SRC_COL.pedals}"></span>Pédales</th></tr>
       ${row('Puissance moyenne', `<b>${r0(s.kickr)}</b> W`, `<b>${r0(s.pedals)}</b> W`)}
-      ${row('Cadence moyenne', s.cadK ? r0(s.cadK) + ' rpm' : '–', s.cadP ? r0(s.cadP) + ' rpm' : '–')}
+      ${row('Cadence moyenne', s.cadK ? r0(s.cadK) + ' rpm <span class="muted">(estimée)</span>' : '–', s.cadP ? r0(s.cadP) + ' rpm' : '–')}
       ${row('Référence', refP ? '' : '✓', refP ? '✓' : '')}</table>
-      <p class="small muted" style="margin-top:8px">Les pédales lisent ${gap >= 0 ? '+' : ''}${fx(gap, 1)} % par rapport au KICKR${Math.abs(gap) <= 5 ? ', un écart normal (pertes de transmission, étalonnage)' : ' : pense à étalonner les pédales et à faire un spindown du KICKR'}.${s.bal ? ` Équilibre moyen : gauche ${fx(s.bal, 1)} %, droite ${fx(100 - s.bal, 1)} %.` : ''}${s.cover < 0.95 ? ` Pédales captées ${r0(s.cover * 100)} % du temps.` : ''}</p>`;
+      <p class="small muted" style="margin-top:8px">Les pédales lisent ${gap >= 0 ? '+' : ''}${fx(gap, 1)} % par rapport au KICKR${Math.abs(gap) <= 5 ? ', un écart normal (pertes de transmission, étalonnage)' : ' : pense à étalonner les pédales et à faire un spindown du KICKR'}.${s.bal ? ` Équilibre moyen : gauche ${fx(s.bal, 1)} %, droite ${fx(100 - s.bal, 1)} %.` : ''}${s.cover < 0.95 ? ` Pédales captées ${r0(s.cover * 100)} % du temps.` : ''}</p>
+      ${s.halfShare >= 0.1 ? `<p class="small muted" style="margin-top:6px">Le KICKR n’a pas de capteur de cadence : il l’estime d’après les à-coups de ton pédalage. Pendant ${r0(s.halfShare * 100)} % de la séance, il a affiché la moitié de ta vraie cadence (pédalage souple, petit braquet). La cadence enregistrée et envoyée à Strava est celle des pédales.</p>` : ''}`;
   }
 
   // ------------------------------------------------------------------ tapis de course (Domyos Run 100, FTMS)
@@ -5563,7 +5694,9 @@ Il faut exactement ${nWeeks} semaines.`,
         <div class="switch"><span>Régler la vitesse automatiquement<br><span class="small muted">À chaque étape, l’app envoie la vitesse au tapis. Un appui sur + / – de la console te rend la main jusqu’à l’étape suivante.</span></span><input type="checkbox" data-k="ctl" ${ctl ? 'checked' : ''}></div>
         <div class="small muted" style="margin:14px 0 6px">Vitesse maximale autorisée</div>
         <div class="chips">${maxes.map(v => `<button class="chip ${cur === v ? 'on' : ''}" data-k="max" data-v="${v}">${v} km/h</button>`).join('')}</div>
-        <div class="btn-row" style="margin-top:16px">${on ? '<button class="btn" data-k="off">Déconnecter</button>' : '<button class="btn primary" data-k="on">Connecter</button>'}</div>
+        <div class="small muted" style="margin:14px 0 6px">Vitesses préenregistrées (séance libre), en km/h</div>
+        <div class="f-edit">${tmPresets().map((v, i) => `<input type="number" inputmode="decimal" step="0.5" min="1" max="${maxR}" value="${v}" data-k="preset" data-i="${i}" aria-label="Vitesse ${i + 1}">`).join('')}</div>
+        <div class="btn-row" style="margin-top:16px">${on ? `<button class="btn primary" data-k="free">${IC.tread} Séance libre</button><button class="btn" data-k="off">Déconnecter</button>` : '<button class="btn primary" data-k="on">Connecter</button>'}</div>
         <details class="small muted" style="margin-top:14px"><summary>Si le tapis n’apparaît pas</summary><p style="margin-top:6px">Une seule fois : dans l’app Domyos E-Connected, active le FTMS, ferme E-Connected, puis éteins et rallume le tapis. Ensuite, aucune autre app (E-Connected, Kinomap, Zwift) ne doit être connectée au tapis pendant la séance. Le tapis apparaît souvent sous un nom commençant par DOMYOS ; ton KICKR peut aussi apparaître dans la liste, ne le choisis pas.</p></details>`;
     };
     const sh = openSheet(`<div id="tm-body">${body()}</div>`);
@@ -5575,8 +5708,15 @@ Il faut exactement ${nWeeks} semaines.`,
       if (k === 'max') { S.settings.tmMax = +b.dataset.v; saveSettings(); re(); }
       else if (k === 'off') { t.disconnect(); updateDevices(); re(); }
       else if (k === 'on') { await connectTm(); re(); }
+      else if (k === 'free') { closeSheet(); openFreeTread(); }
     });
-    sh.addEventListener('change', e => { if (e.target.dataset.k === 'ctl') { S.settings.tmControl = e.target.checked; saveSettings(); } });
+    sh.addEventListener('change', e => {
+      if (e.target.dataset.k === 'ctl') { S.settings.tmControl = e.target.checked; saveSettings(); }
+      if (e.target.dataset.k === 'preset') {
+        const list = tmPresets().slice(), v = Math.round(parseFloat(String(e.target.value).replace(',', '.')) * 10) / 10;
+        if (v >= 1 && v <= 25) { list[+e.target.dataset.i] = v; S.settings.tmPresets = list; saveSettings(); toast('Vitesse enregistrée'); } else e.target.value = list[+e.target.dataset.i];
+      }
+    });
   }
   function tmLiveHTML(t) {
     const on = t.state === 'connected', d = t.data || {};
@@ -5762,8 +5902,8 @@ Il faut exactement ${nWeeks} semaines.`,
     if (samples.length < 60) { toast('Séance de moins d’une minute : rien n’a été enregistré'); render(); return; }
     const sm = run.summary();
     const id = 'tm' + samples[0].t;
-    const detail = { id, sport: 'run', intensity: run.intensity, startTime: samples[0].t, name: run.workout.name, samples, laps: run.laps.map(l => Object.assign({}, l, { to: l.to === null ? samples.length : l.to })), pauses: run.pauses, summary: sm, dsl: SP.toDSL(run.tree, 'run'), control: run.control };
-    const a = { id, sport: 'run', sub: 'treadmill', source: 'treadmill', cat: run.workout.cat, name: run.workout.name, startTime: samples[0].t, summary: sm, planSessionId: run.planSessionId, completed: run.idx >= run.steps.length };
+    const detail = { id, sport: 'run', intensity: run.intensity, startTime: samples[0].t, name: run.workout.name, samples, laps: run.laps.map(l => Object.assign({}, l, { to: l.to === null ? samples.length : l.to })), pauses: run.pauses, summary: sm, dsl: run.tree ? SP.toDSL(run.tree, 'run') : null, control: run.control, free: !run.tree };
+    const a = { id, sport: 'run', sub: 'treadmill', source: 'treadmill', cat: run.workout.cat, name: run.workout.name, startTime: samples[0].t, summary: sm, planSessionId: run.planSessionId || null, completed: run.steps ? run.idx >= run.steps.length : true };
     try { await saveActivity(a, detail); } catch (e) { toast('Impossible d’enregistrer : ' + e.message, true); }
     if (a.planSessionId) markPlanDone(a.planSessionId, a.id); else autoLinkPlan(a);
     render();
@@ -5780,6 +5920,240 @@ Il faut exactement ${nWeeks} semaines.`,
       const ok = r.target && Math.abs(r.avgSpeed - r.target) <= 0.3;
       return `<tr><td class="ellipsis" style="max-width:110px">${esc(r.label || '')}</td><td>${W.fmtDur(r.n, true)}</td><td>${r0(r.dist)} m</td><td>${r.target ? paceOf(r.target) : '–'}</td><td><b style="color:${r.target ? (ok ? 'var(--ok)' : 'var(--warn, #f2a93b)') : 'inherit'}">${paceOf(r.avgSpeed)}</b></td><td>${r.avgHr ? r0(r.avgHr) : '–'}</td></tr>`;
     }).join('')}</table><p class="small muted" style="margin-top:6px">Allures en min/km.${detail.control ? ' La vitesse a été réglée par l’app.' : ''}</p>`;
+  }
+
+  // ------------------------------------------------------------------ séances libres : piloter le tapis ou le home trainer depuis le téléphone
+  const FREE_BIKE_ZONES = [[0.5, 'Récup'], [0.65, 'Endurance'], [0.8, 'Tempo'], [0.95, 'Seuil'], [1.1, 'PMA']];
+  const FREE_GRADES = [0, 2, 4, 6, 8];
+  const tmPresets = () => (S.settings.tmPresets && S.settings.tmPresets.length ? S.settings.tmPresets : [4, 8, 10, 12, 14]);
+  const round5 = w => Math.round(w / 5) * 5;
+
+  // ---- tapis libre
+  async function openFreeTread() {
+    if (!S.profile) { openOnboarding(); return; }
+    if (!dev.tm || dev.tm.state !== 'connected') {
+      if (S.demo) await dev.tm.connect();
+      else { await connectTm(); if (!dev.tm || dev.tm.state !== 'connected') return; }
+      updateDevices();
+    }
+    if (S.demo && sim.hrRun.state !== 'connected') sim.hrRun.connect();
+    const run = new TM.FreeTread({ tm: dev.tm, hr: S.demo ? sim.hrRun : dev.hr, prof: P(), control: S.settings.tmControl !== false, maxSpeed: S.settings.tmMax || 14 });
+    S.treadRun = run;
+    const el = document.createElement('div');
+    el.id = 'player'; el.className = 'tread free';
+    el.innerHTML = `
+      <div class="p-head"><button class="iconbtn" data-f="end" aria-label="Terminer">${IC.close}</button><div class="title ellipsis">Tapis libre</div><span class="p-elapsed" id="f-el">0:00</span></div>
+      <div class="f-main">
+        <div class="p-power"><div class="p-srctag" id="f-mode"><i></i><span id="f-modetxt"></span></div><div class="big" id="f-spd">0,0<small>km/h</small></div><div class="target" id="f-tg"></div></div>
+        <div class="f-presets" id="f-presets"></div>
+        <div class="f-fine" id="f-fine"><button data-f="nudge" data-v="-0.5">−0,5</button><button data-f="nudge" data-v="-0.1">−0,1</button><button data-f="nudge" data-v="0.1">+0,1</button><button data-f="nudge" data-v="0.5">+0,5</button></div>
+        <div class="p-metrics f-metrics"><div class="m"><b id="f-time">0:00</b><span>temps</span></div><div class="m"><b id="f-dist">0,00</b><span>km</span></div><div class="m"><b id="f-pace">–</b><span>allure /km</span></div><div class="m"><b id="f-avg">–</b><span>allure moy.</span></div><div class="m"><b id="f-hr">–</b><span>bpm</span></div><div class="m"><b id="f-kcal">0</b><span>kcal</span></div><div class="m"><b id="f-vavg">–</b><span>km/h moy.</span></div><div class="m"><b id="f-inc">–</b><span>pente %</span></div></div>
+        <div class="p-chart"><canvas id="f-chart"></canvas></div>
+      </div>
+      <div class="f-controls"><button class="btn" data-f="belt" id="f-belt"></button><button class="btn" data-f="lap">${IC.flag || ''}<span>Tour</span></button><button class="btn primary" data-f="end">Terminer</button></div>`;
+    document.body.appendChild(el);
+    document.body.style.overflow = 'hidden';
+    Hist.push(); keepAwake(true);
+    let alertT = null, lastChart = 0, busy = false;
+    const set = (id, v) => { const e = document.getElementById(id); if (e && e.innerHTML !== v) e.innerHTML = v; };
+    const banner = (t, ms) => { let a = $('#p-alert'); if (!a) { a = document.createElement('div'); a.id = 'p-alert'; a.className = 'p-alert'; el.appendChild(a); } a.textContent = t; clearTimeout(alertT); alertT = setTimeout(() => a.remove(), ms || 5000); };
+    const presetsHTML = () => tmPresets().map(v => `<button data-f="preset" data-v="${v}" ${v > run.maxSpeed ? 'disabled' : ''} class="${run.target !== null && Math.abs(run.target - v) < 0.05 ? 'on' : ''}"><b>${kmh(v)}</b><span>km/h</span></button>`).join('');
+    function update() {
+      const d = dev.tm.data || {}, v = d.speed || 0, moving = v >= 0.5;
+      set('f-spd', `${kmh(v)}<small>km/h</small>`);
+      set('f-tg', run.target !== null ? `Consigne <b>${kmh(run.target)}</b> km/h · ${paceOf(run.target)}/km` : (moving ? '' : 'Choisis une vitesse pour démarrer le tapis'));
+      const mode = !run.control ? ['lecture seule : règle la vitesse sur la console', '#62b0ff'] : run.state === 'paused' ? ['tapis arrêté : séance en pause', '#f2a93b'] : ['vitesse pilotée par le téléphone', TM_COL];
+      set('f-modetxt', mode[0]); $('#f-mode').style.setProperty('--c', mode[1]);
+      set('f-presets', presetsHTML());
+      set('f-el', W.fmtDur(run.elapsed));
+      set('f-time', W.fmtDur(run.elapsed));
+      set('f-dist', fx(run.distance / 1000, 2));
+      set('f-pace', paceOf(v));
+      set('f-avg', run.distance > 50 ? SP.fmtPace(run.elapsed / (run.distance / 1000)) : '–');
+      set('f-vavg', run.elapsed > 10 ? kmh(run.distance / run.elapsed * 3.6) : '–');
+      const hr = run._hr(); set('f-hr', hr ? String(hr) : '–');
+      set('f-kcal', String(r0((P().weight || 70) * run.distance / 1000)));
+      set('f-inc', d.incline !== null && d.incline !== undefined ? fx(d.incline, 1) : '–');
+      const bb = moving ? `${IC.pause}<span>Arrêter le tapis</span>` : `${IC.play}<span>Démarrer à ${kmh(run.target || tmPresets()[0])} km/h</span>`;
+      const be = $('#f-belt'); if (be.innerHTML !== bb) be.innerHTML = bb;
+      be.hidden = !run.control; be.classList.toggle('danger', moving);
+      $('#f-presets').classList.toggle('ro', !run.control); $('#f-fine').hidden = !run.control;
+      if (Date.now() - lastChart > 1000) { lastChart = Date.now(); drawFreeChart(run.samples, 's', 'tg', run.prof.hrMax, 'f-chart'); }
+    }
+    // démarrage de la bande depuis le téléphone : compte à rebours de 3 s
+    async function startBelt(v) {
+      if (busy) return; busy = true;
+      let c = document.createElement('div'); c.className = 'f-count'; el.appendChild(c);
+      for (let n = 3; n > 0; n--) { c.innerHTML = `<b>${n}</b><span>Le tapis démarre à ${kmh(v)} km/h</span>`; beep(880, 0.1); await new Promise(r => setTimeout(r, 1000)); }
+      c.remove();
+      await run.setTarget(v);
+      busy = false;
+    }
+    run.on('tick', update);
+    run.on('state', s => { if (s === 'running') say('C’est parti'); update(); });
+    run.on('console', v => toast(`Vitesse réglée à la console : ${kmh(v)} km/h`));
+    run.on('beltstop', () => banner('Tapis arrêté : séance en pause. Choisis une vitesse pour repartir.'));
+    run.on('safety', () => banner('Clé de sécurité retirée : le tapis s’est arrêté.', 8000));
+    run.on('lap', n => { beep(1320, 0.15); toast('Tour ' + n); });
+    function cleanup() { run.stop(); keepAwake(false); el.remove(); document.body.style.overflow = ''; S.treadRun = null; Hist.pop(1); }
+    el.addEventListener('click', async e => {
+      const b = e.target.closest('[data-f]'); if (!b || b.disabled) return;
+      const k = b.dataset.f;
+      if (k === 'preset') {
+        const v = +b.dataset.v;
+        if (!run.control) { toast(`Règle ${kmh(v)} km/h sur la console`); run.target = v; update(); return; }
+        if ((dev.tm.data.speed || 0) < 0.5) await startBelt(v); else { beep(990, 0.08); await run.setTarget(v, true); }
+        update();
+      } else if (k === 'nudge') { if ((dev.tm.data.speed || 0) >= 0.5) { await run.nudge(+b.dataset.v); update(); } else toast('Démarre d’abord le tapis'); }
+      else if (k === 'belt') {
+        if ((dev.tm.data.speed || 0) >= 0.5) { await run.stopBelt(); toast('Le tapis ralentit et s’arrête'); }
+        else await startBelt(run.target || tmPresets()[0]);
+        update();
+      } else if (k === 'lap') { if (run.state === 'running' || run.state === 'paused') run.lap(); else toast('La séance n’a pas encore démarré'); }
+      else if (k === 'end') {
+        const moving = (dev.tm.data.speed || 0) >= 0.5;
+        const v = await ask('Terminer la séance ?', moving ? 'Le tapis continue de tourner : arrête-le avec STOP ou avec « Arrêter le tapis ».' : 'Ta séance libre sera enregistrée dans le journal.', [{ label: 'Enregistrer et terminer', value: 'save', cls: 'primary' }, { label: 'Continuer', value: null }, { label: 'Abandonner sans enregistrer', value: 'drop' }]);
+        if (v === 'save') finishTread(run, cleanup);
+        else if (v === 'drop') cleanup();
+      }
+    });
+    run.begin();
+    update();
+  }
+
+  // ---- vélo libre (KICKR)
+  async function openFreeBike() {
+    if (!S.profile) { openOnboarding(); return; }
+    if (dev.trainer.state !== 'connected') {
+      const choice = await ask('Home trainer non connecté', 'Connecte ton KICKR pour régler la résistance depuis le téléphone.', [
+        { label: 'Connecter mon KICKR', value: 'conn', cls: 'primary' }, { label: 'Essayer en mode démo', value: 'demo' }, { label: 'Annuler', value: null }]);
+      if (!choice) return;
+      if (choice === 'demo') setDemo(true);
+      else { await connectTrainer(); if (dev.trainer.state !== 'connected') return; }
+    }
+    const p = P();
+    const tree = [{ t: 's', d: 6 * 3600, p: 0.6, l: 'Séance libre' }];
+    const run = new RUN.Runner({ workout: { id: 'free-bike', name: 'Vélo libre', cat: 'free', source: 'free' }, tree, ftp: p.ftp, trainer: dev.trainer, hr: dev.hr, cad: dev.cad || null, pm: dev.pm && dev.pm.state === 'connected' ? dev.pm : null, powerSrc: S.settings.powerSrc || 'pedals', match: S.settings.powerMatch !== false, autoPause: S.settings.autoPause });
+    run.manualW = S.settings.freeBikeW || round5(p.ftp * 0.65);
+    S.runner = run;
+    let mode = 'erg';
+    const el = document.createElement('div');
+    el.id = 'player'; el.className = 'free bike';
+    el.innerHTML = `
+      <div class="p-head"><button class="iconbtn" data-f="end" aria-label="Terminer">${IC.close}</button><div class="title ellipsis">Vélo libre</div><span class="p-elapsed" id="b-el">0:00</span></div>
+      <div class="f-main">
+        <div class="seg f-seg"><button data-f="mode" data-v="erg" class="on">Puissance (ERG)</button><button data-f="mode" data-v="grade">Pente</button></div>
+        <div class="p-power"><div class="p-srctag" id="p-srctag" ${run.pm ? '' : 'hidden'}><i></i>puissance <span id="p-srcname"></span></div><div class="big" id="b-pw">0<small>W</small></div><div class="target" id="b-tg"></div>${sourcesHTML()}</div>
+        <div class="f-presets" id="b-presets"></div>
+        <div class="f-fine" id="b-fine"></div>
+        <div class="p-metrics f-metrics"><div class="m"><b id="b-time">0:00</b><span>temps</span></div><div class="m"><b id="b-cad">–</b><span>rpm</span></div><div class="m"><b id="b-hr">–</b><span>bpm</span></div><div class="m"><b id="b-avg">–</b><span>W moy.</span></div><div class="m"><b id="b-spd">–</b><span>km/h</span></div><div class="m"><b id="b-dist">0,0</b><span>km</span></div><div class="m"><b id="b-kj">0</b><span>kJ</span></div><div class="m"><b id="b-np">–</b><span>NP</span></div></div>
+        <div class="p-chart"><canvas id="b-chart"></canvas></div>
+      </div>
+      <div class="f-controls"><button class="btn" data-f="pause" id="b-pause"></button><button class="btn" data-f="lap">${IC.flag || ''}<span>Tour</span></button><button class="btn primary" data-f="end">Terminer</button></div>`;
+    document.body.appendChild(el);
+    document.body.style.overflow = 'hidden';
+    Hist.push(); keepAwake(true);
+    let lastChart = 0;
+    const set = (id, v) => { const e = document.getElementById(id); if (e && e.innerHTML !== v) e.innerHTML = v; };
+    // puissance lissée sur 3 s (pédales ou KICKR selon la référence)
+    const pw = [];
+    const refPower = () => { const m = run.pmData(); return run.refSource === 'pedals' && m ? m.power : (dev.trainer.data.power || 0); };
+    const pwT = setInterval(() => { pw.push({ t: Date.now(), p: refPower() }); while (pw.length && Date.now() - pw[0].t > 3000) pw.shift(); }, 250);
+    const p3 = () => pw.length ? pw.reduce((a, x) => a + x.p, 0) / pw.length : refPower();
+    function controlsHTML() {
+      if (mode === 'erg') {
+        set('b-presets', FREE_BIKE_ZONES.map(([f, l]) => { const w = round5(p.ftp * f); return `<button data-f="preset" data-v="${w}" class="${run.manualW === w ? 'on' : ''}"><b>${w}</b><span>${l}</span></button>`; }).join(''));
+        set('b-fine', [-10, -5, 5, 10].map(dv => `<button data-f="nudge" data-v="${dv}">${dv > 0 ? '+' : '−'}${Math.abs(dv)} W</button>`).join(''));
+      } else {
+        set('b-presets', FREE_GRADES.map(g => `<button data-f="preset" data-v="${g}" class="${run.grade === g ? 'on' : ''}"><b>${g}</b><span>% pente</span></button>`).join(''));
+        set('b-fine', [-1, -0.5, 0.5, 1].map(dg => `<button data-f="nudge" data-v="${dg}">${dg > 0 ? '+' : '−'}${fx(Math.abs(dg), 1)} %</button>`).join(''));
+      }
+      el.querySelectorAll('.f-seg button').forEach(b => b.classList.toggle('on', b.dataset.v === mode));
+    }
+    function update() {
+      const d = dev.trainer.data || {}, smp = run.samples, n = smp.length;
+      set('b-pw', `${r0(p3())}<small>W</small>`);
+      set('b-tg', mode === 'erg' ? `Consigne <b>${run.manualW}</b> W · ${r0(run.manualW / p.ftp * 100)} % FTP` : `Pente <b>${fx(run.grade, 1)}</b> % · résistance libre`);
+      set('b-el', W.fmtDur(run.elapsed)); set('b-time', W.fmtDur(run.elapsed));
+      const cad = run._cad(d); set('b-cad', cad ? String(r0(cad)) : '–');
+      const hr = dev.hr && dev.hr.state === 'connected' ? dev.hr.bpm : null; set('b-hr', hr ? String(hr) : '–');
+      if (n) {
+        const PW = smp.map(s => s.p), sum = PW.reduce((a, b) => a + b, 0);
+        set('b-avg', String(r0(sum / n))); set('b-kj', String(r0(sum / 1000)));
+        set('b-spd', fx(smp[n - 1].s || 0, 1)); set('b-dist', fx((smp[n - 1].d || 0) / 1000, 1));
+        if (n >= 30) set('b-np', String(r0(W.normalizedPower(PW))));
+      }
+      const pb = $('#b-pause'), want = run.state === 'paused' ? `${IC.play}<span>Reprendre</span>` : `${IC.pause}<span>Pause</span>`;
+      if (pb.innerHTML !== want) pb.innerHTML = want;
+      updateSources(run, set);
+      if (Date.now() - lastChart > 1000) { lastChart = Date.now(); drawFreeChart(smp, 'p', 'tg', p.hrMax, 'b-chart'); }
+    }
+    const tick = setInterval(update, 250);
+    run.on('lap', n => { beep(1320, 0.15); toast('Tour ' + n); });
+    run.on('state', s => { if (s === 'paused') toast('En pause : reprends quand tu veux'); });
+    function cleanup() { clearInterval(tick); clearInterval(pwT); keepAwake(false); el.remove(); document.body.style.overflow = ''; S.runner = null; Hist.pop(1); }
+    // nouveau tour, sauf si le tour en cours vient de commencer (on le renomme)
+    const markLap = (label, target) => {
+      const l = run.laps[run.laps.length - 1];
+      if (l && l.to === null && run.samples.length - l.from < 10) { l.label = label; l.target = target; } else run.lap(label, target);
+    };
+    let ended = false;
+    const end = save => { if (ended) return; ended = true; if (run.state !== 'done') run.finish(save); if (save) finishSession(run, cleanup); else cleanup(); };
+    run.on('done', () => end(true)); // au bout de 6 h
+    el.addEventListener('click', async e => {
+      const b = e.target.closest('[data-f]'); if (!b) return;
+      const k = b.dataset.f;
+      if (k === 'mode') {
+        mode = b.dataset.v;
+        if (mode === 'erg') run.setManual(run.manualW); else { if (run.ergOn) run.toggleErg(); run.setGrade(run.grade || 0); }
+        markLap(mode === 'erg' ? run.manualW + ' W' : 'Pente ' + fx(run.grade, 1) + ' %', mode === 'erg' ? run.manualW : 0);
+        controlsHTML(); update();
+      } else if (k === 'preset' || k === 'nudge') {
+        const v = +b.dataset.v;
+        if (mode === 'erg') {
+          const w = k === 'preset' ? v : Math.max(50, run.manualW + v);
+          if (k === 'preset') markLap(w + ' W', w);
+          else { const l = run.laps[run.laps.length - 1]; if (l && run.samples.length - l.from < 10) { l.label = w + ' W'; l.target = w; } }
+          run.setManual(w); S.settings.freeBikeW = w; saveSettings();
+        } else {
+          const g = k === 'preset' ? v : run.grade + v;
+          run.setGrade(g);
+          if (k === 'preset') markLap('Pente ' + fx(run.grade, 1) + ' %', 0);
+        }
+        beep(990, 0.06); controlsHTML(); update();
+      } else if (k === 'pause') { run.state === 'paused' ? run.resume() : run.pause(); update(); }
+      else if (k === 'lap') run.lap(mode === 'erg' ? run.manualW + ' W' : 'Pente ' + fx(run.grade, 1) + ' %', mode === 'erg' ? run.manualW : 0);
+      else if (k === 'end') {
+        const v = await ask('Terminer la séance ?', 'Ta séance libre sera enregistrée dans le journal.', [{ label: 'Enregistrer et terminer', value: 'save', cls: 'primary' }, { label: 'Continuer', value: null }, { label: 'Abandonner sans enregistrer', value: 'drop' }]);
+        if (v === 'save') end(true);
+        else if (v === 'drop') end(false);
+      }
+    });
+    controlsHTML();
+    run.start();
+    const l0 = run.laps[0]; if (l0) { l0.target = run.manualW; l0.label = run.manualW + ' W'; }
+    update();
+  }
+
+  // graphique des séances libres : mesure (blanc), consigne (jaune), FC (rouge) sur toute la séance
+  function drawFreeChart(smp, key, tgKey, hrMax, id) {
+    const cv = document.getElementById(id); if (!cv) return;
+    const { ctx, w, h } = setupCanvas(cv);
+    const n = smp.length; if (n < 2) return;
+    const X = i => i / Math.max(n - 1, 60) * w;
+    const mx = Math.max(1, ...smp.map(s => s[key] || 0), ...smp.map(s => s[tgKey] || 0)) * 1.12, Y = v => h - v / mx * h;
+    const step = Math.max(1, Math.floor(n / w));
+    ctx.beginPath(); ctx.strokeStyle = 'rgba(255,203,47,.9)'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.2; let st = false;
+    for (let i = 0; i < n; i += step) { const t = smp[i][tgKey]; if (!t) { st = false; continue; } if (!st) { ctx.moveTo(X(i), Y(t)); st = true; } else ctx.lineTo(X(i), Y(t)); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.strokeStyle = '#EEF3FA'; ctx.lineWidth = 1.6;
+    for (let i = 0; i < n; i += step) { const y = Y(smp[i][key] || 0); i ? ctx.lineTo(X(i), y) : ctx.moveTo(X(i), y); }
+    ctx.stroke();
+    if (smp.some(s => s.hr)) {
+      const hm = hrMax || 190; ctx.beginPath(); ctx.strokeStyle = 'rgba(255,95,95,.9)'; ctx.lineWidth = 1.2; st = false;
+      for (let i = 0; i < n; i += step) { if (!smp[i].hr) continue; const y = h - (smp[i].hr - 60) / (hm - 60) * h * 0.95; if (!st) { ctx.moveTo(X(i), y); st = true; } else ctx.lineTo(X(i), y); }
+      ctx.stroke();
+    }
   }
 
   // ------------------------------------------------------------------ navigation & vues
@@ -5903,6 +6277,7 @@ Il faut exactement ${nWeeks} semaines.`,
         <div class="device"><div class="ico">${IC.heart}</div><div class="grow"><div><b id="dv-hr-name">Ceinture cardio</b></div><div class="small muted" id="dv-hr-state">—</div></div><div class="live" id="dv-hr-live"></div><button class="btn sm" id="dv-hr-btn" data-act="connHr">Connecter</button></div>
         <div class="device" id="dv-pm"><div class="ico" style="color:${SRC_COL.pedals}">${IC.pedal}</div><div class="grow"><div><b id="dv-pm-name">Pédales Assioma Duo</b></div><div class="small muted" id="dv-pm-state">Facultatif</div></div><div class="live" id="dv-pm-live"></div><button class="btn sm" id="dv-pm-btn" data-act="connPm">Connecter</button></div>
         <div class="device" id="dv-tm"><div class="ico">${IC.tread}</div><div class="grow"><div><b id="dv-tm-name">Tapis de course</b></div><div class="small muted" id="dv-tm-state">Domyos Run 100 et tapis FTMS</div></div><div class="live" id="dv-tm-live"></div><button class="btn sm" id="dv-tm-btn" data-act="connTm">Connecter</button></div>
+        <div class="btn-row f-entry"><button class="btn" data-act="freeBike">${IC.bike} Vélo libre</button><button class="btn" data-act="freeTread">${IC.tread} Tapis libre</button></div>
         <div class="device" id="dv-cad" ${S.demo ? 'hidden' : ''}><div class="ico">${IC.cad || IC.bike}</div><div class="grow"><div><b id="dv-cad-name">Capteur de cadence</b></div><div class="small muted" id="dv-cad-state">Facultatif</div></div><div class="live" id="dv-cad-live"></div><button class="btn sm" id="dv-cad-btn" data-act="connCad">Connecter</button></div>
       </div></section>`;
     return html;
@@ -6400,7 +6775,7 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     const chips = [['all', 'Toutes'], ['fav', 'Favoris'], ['mine', 'Mes séances']].concat(Object.entries(cats).map(([k, v]) => [k, v.name]));
     html += `<div class="chips" style="margin:14px 0">${chips.map(([k, l]) => `<button class="chip ${S.libCat === k ? 'on' : ''}" data-act="libcat" data-v="${k}">${cats[k] ? `<span class="sw" style="background:${cats[k].color}"></span>` : ''}${l}</button>`).join('')}</div>`;
     html += `<div class="small muted" style="margin:-4px 0 6px">Temps dont je dispose</div><div class="chips durchips" style="margin-bottom:14px"><button class="chip ${!S.libMinutes ? 'on' : ''}" data-act="libMin" data-v="0">Durée d’origine</button>${[30, 45, 60, 75, 90].map(m => `<button class="chip ${S.libMinutes === m ? 'on' : ''}" data-act="libMin" data-v="${m}">${m} min</button>`).join('')}</div>`;
-    html += `<div class="btn-row" style="margin-bottom:16px"><button class="btn" data-act="builder">Créer une séance</button><button class="btn" data-act="surpriseSheet">${IC.spark} Surprise</button>${AI.available() ? `<button class="btn" data-act="aiWorkout">${IC.spark} IA</button>` : ''}</div>`;
+    html += `<div class="btn-row" style="margin-bottom:16px">${sp === 'bike' ? `<button class="btn" data-act="freeBike">${IC.bike} Séance libre</button>` : sp === 'run' ? `<button class="btn" data-act="freeTread">${IC.tread} Tapis libre</button>` : ''}<button class="btn" data-act="builder">Créer une séance</button><button class="btn" data-act="surpriseSheet">${IC.spark} Surprise</button>${AI.available() ? `<button class="btn" data-act="aiWorkout">${IC.spark} IA</button>` : ''}</div>`;
     let list = sp === 'bike' ? allWorkouts() : sportWorkouts(sp);
     if (S.libCat === 'fav') list = list.filter(w => S.favs.includes(w.id));
     else if (S.libCat === 'mine') list = list.filter(w => w.source !== 'lib');
@@ -7088,6 +7463,8 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     connCad: () => connectCad(),
     connPm: () => connectPm(),
     connTm: () => connectTm(),
+    freeTread: () => openFreeTread(),
+    freeBike: () => openFreeBike(),
     libMin: el => { S.libMinutes = +el.dataset.v; render(); },
     ideaMin: el => { S.ideaMinutes = +el.dataset.v; render(); },
     connHr: () => connectHr(),

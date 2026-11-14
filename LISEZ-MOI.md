@@ -24,6 +24,16 @@ Ton application de triathlon sur téléphone Android : journal de toutes tes act
 - Tu as un capteur de cadence Bluetooth sur la manivelle ? Connecte-le dans Accueil → Home trainer. Il devient prioritaire sur la mesure du KICKR. Il est facultatif.
 - Dans tes propres séances, ajoute `c95` à une étape pour fixer une cadence, par exemple `5x(3m@75 c110, 2m@60 c90)`.
 
+## Séances libres (tapis et home trainer)
+
+Pour faire ta propre séance en pilotant la machine depuis le téléphone, sans choisir de séance : Accueil → Appareils → **Tapis libre** ou **Vélo libre** (aussi dans Séances).
+
+- **Tapis libre** : cinq boutons de vitesse (4, 8, 10, 12, 14 km/h par défaut, modifiables dans Réglages du tapis) et des réglages fins −0,5 / −0,1 / +0,1 / +0,5 km/h. Si le tapis tourne déjà, la séance démarre tout de suite et l’app prend la main. S’il est à l’arrêt, un appui sur une vitesse lance un compte à rebours de 3 s, puis la bande démarre à cette vitesse. Le bouton « Arrêter le tapis » reste toujours visible. Un changement fait sur la console est suivi par l’app.
+- **Vélo libre** : en mode Puissance (ERG), cinq boutons calés sur ta FTP (Récup, Endurance, Tempo, Seuil, PMA) et des réglages fins de ±5 / ±10 W. En mode Pente, le KICKR simule une pente de 0 à 8 % (réglages de ±0,5 / ±1 %) et tu gères l’effort avec tes vitesses. Avec les pédales Assioma, KICKR et pédales s’affichent côte à côte.
+- **Affichage** : vitesse ou puissance en grand avec la consigne, puis temps, distance, allure (actuelle et moyenne) ou cadence, FC, calories ou kJ, moyenne et graphique de la séance.
+- **Tours** : chaque bouton de préréglage ouvre un nouveau tour ; le bouton « Tour » en ajoute un quand tu veux. Ils apparaissent comme intervalles dans la fiche de l’activité.
+- **Terminer** enregistre la séance dans le Journal (avec export Strava et Garmin, comme les autres).
+
 ## Forme du jour
 
 - **Vélo** : dans la fiche d’une séance, « Forme du jour » affiche la puissance de l’effort le plus dur. Baisse-la ou monte-la par pas de 5 W, ou choisis un raccourci (Fatigué −10 %, −5 %, Normal, +3 %, En forme +5 %) : toutes les consignes de la séance changent dans la même proportion.
@@ -38,6 +48,7 @@ Ton application de triathlon sur téléphone Android : journal de toutes tes act
 - **Réglage Favero** : laisse la transmission Bluetooth sur un seul canal, pas « Dual channel L/R ». Sinon l’app ne reçoit que la moitié de la puissance (elle te prévient si elle le détecte).
 - **Pendant la séance** : le grand chiffre est la puissance de référence (les pédales par défaut). En dessous, deux tuiles montrent côte à côte le KICKR (puissance, cadence, résistance réglée) et les pédales (puissance, cadence, équilibre gauche/droite). La tuile encadrée est la référence.
 - **ERG calé sur les pédales** : les pédales lisent souvent quelques watts de plus que le KICKR. L’app apprend cet écart et règle la résistance du KICKR pour que les pédales affichent exactement la cible. Tu peux le désactiver, ou choisir le KICKR comme référence, dans Réglages des pédales.
+- **Cadence du KICKR** : le KICKR n’a pas de capteur de cadence, il l’estime d’après les à-coups du pédalage (« rpm est. »). En récupération ou avec un petit braquet, il affiche souvent la moitié de la vraie cadence : sa tuile l’indique alors (« cadence ≈ ½ »). L’app utilise toujours la cadence des pédales quand elles sont connectées (affichage, consignes, fichier envoyé à Strava et Garmin).
 - **Si les pédales décrochent** : le KICKR prend le relais automatiquement et la séance continue.
 - **Après la séance** : la fiche compare les deux capteurs (moyennes, écart en %, équilibre gauche/droite), et le graphique trace les deux puissances. Le fichier .FIT envoyé à Strava et Garmin contient la puissance de référence et l’équilibre gauche/droite.
 - **Étalonnage** : les Assioma font leur zéro toutes seules. Le bouton « Étalonner maintenant » force un zéro (pieds hors des pédales, manivelles immobiles).
