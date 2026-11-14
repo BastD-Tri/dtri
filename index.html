@@ -232,6 +232,20 @@ table.laps th:first-child, table.laps td:first-child { text-align: left; }
 .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
 .legend i.dash { background: repeating-linear-gradient(90deg, #4dd0c8 0 3px, transparent 3px 5px); }
 table.srccmp td:first-child { color: var(--muted); }
+/* ---------- forme du jour ---------- */
+.forme { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; gap: 8px; background: var(--surface2); border-radius: var(--r); padding: 6px; }
+.forme > button { height: 44px; border-radius: 10px; background: var(--surface); color: var(--text); font-size: 24px; font-weight: 600; border: 0; }
+.forme .fv { text-align: center; line-height: 1.15; }
+.forme .fv b { font-family: var(--chrono); font-style: italic; font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; }
+.forme .fv span { display: block; font-size: 12px; color: var(--muted); }
+.startcover .forme { text-align: left; }
+#player.tread .startcover { background: rgba(13,27,46,.97); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+/* ---------- tapis de course ---------- */
+#player.tread .p-power .big { font-size: clamp(84px, 30vw, 170px); }
+#player.tread .t-pace { font-family: var(--chrono); font-style: italic; font-weight: 800; font-size: 30px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+#player.tread .t-pace .muted { font-family: var(--body, inherit); font-style: normal; font-weight: 500; font-size: 14px; }
+#player.tread .p-controls .adj .val { font-size: 11.5px; }
 table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 .p-chart { min-height: 90px; position: relative; }
 .p-chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -1193,6 +1207,9 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
     const end = fitTs(S[S.length - 1].t);
     const elapsed = Math.max(1, end - start + 1);
     const timer = S.length;
+    // vélo d'intérieur (2/6) ou course sur tapis (1/1)
+    const [SPORT, SUB] = session.sport === 'run' ? [1, 1] : [2, 6];
+    const hasP = S.some(x => x.p > 0);
 
     // file_id (0)
     w.define(0, 0, [[0, 'enum'], [1, 'uint16'], [2, 'uint16'], [3, 'uint32z'], [4, 'uint32'], [8, 'string', 20]]);
@@ -1256,11 +1273,11 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
       w.write(4, [
         lapCount, lapEnd, 9, 1, lapStart,
         (lapEnd - lapStart + 1) * 1000, seg.length * 1000, dist * 100,
-        Math.round(P.reduce((a, b) => a + b, 0) / 1000),
+        hasP ? Math.round(P.reduce((a, b) => a + b, 0) / 1000) : null,
         seg.length ? (dist / seg.length) * 1000 : null,
         max(seg.map(x => (x.s || 0) / 3.6 * 1000)),
-        avg(H), max(H), avg(C), max(C), avg(P), max(P),
-        intensity, idx === L.length - 1 ? 7 : 1, 2, 6
+        avg(H), max(H), avg(C), max(C), hasP ? avg(P) : null, hasP ? max(P) : null,
+        intensity, idx === L.length - 1 ? 7 : 1, SPORT, SUB
       ]);
       lapCount++;
     });
@@ -1272,7 +1289,7 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
       [18, 'uint8'], [19, 'uint8'], [20, 'uint16'], [21, 'uint16'], [25, 'uint16'], [26, 'uint16'], [28, 'enum'],
       [34, 'uint16'], [35, 'uint16'], [36, 'uint16'], [45, 'uint16'], [48, 'uint32'], [37, 'uint16']]);
     w.write(5, [
-      0, end, 8, 1, start, 2, 6,
+      0, end, 8, 1, start, SPORT, SUB,
       elapsed * 1000, timer * 1000, (sm.distance || 0) * 100, sm.calories,
       (sm.avgSpeed || 0) * 1000, (sm.maxSpeed || 0) * 1000,
       sm.avgHr || null, sm.maxHr || null, sm.avgCad || null, sm.maxCad || null,
@@ -1296,7 +1313,7 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
     const S = session.samples;
     const iso = ms => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
     const L = (session.laps && session.laps.length) ? session.laps : [{ from: 0, to: S.length }];
-    let x = '<?xml version="1.0" encoding="UTF-8"?>\n<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2">\n<Activities><Activity Sport="Biking"><Id>' + iso(S[0].t) + '</Id>\n';
+    let x = '<?xml version="1.0" encoding="UTF-8"?>\n<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2">\n<Activities><Activity Sport="' + (session.sport === 'run' ? 'Running' : 'Biking') + '"><Id>' + iso(S[0].t) + '</Id>\n';
     L.forEach(lap => {
       const seg = S.slice(lap.from, lap.to);
       if (!seg.length) return;
@@ -2094,7 +2111,7 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
       this.emit('structure');
     }
 
-    setIntensity(v) { this.intensity = Math.max(0.5, Math.min(1.5, Math.round(v * 100) / 100)); this._apply(true); this.emit('intensity', this.intensity); }
+    setIntensity(v) { this.intensity = Math.max(0.5, Math.min(1.5, Math.round(v * 1000) / 1000)); this._apply(true); this.emit('intensity', this.intensity); }
     setGrade(g) { this.grade = Math.max(-5, Math.min(15, Math.round(g * 2) / 2)); this._apply(true); }
     toggleErg() { this.ergOn = !this.ergOn; this._apply(true); this.emit('erg', this.ergOn); }
 
@@ -3529,6 +3546,399 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
   else root.WC = Object.assign(root.WC || {}, { AD: api });
 })(typeof window !== 'undefined' ? window : globalThis);
 
+/* D Tri Training — tapis de course connecté (Bluetooth FTMS, ex. Domyos Run 100) et séances de course sur tapis
+   Le tapis envoie vitesse, distance (et parfois pente, FC). S'il accepte les consignes, l'app règle la vitesse
+   de chaque étape. Par sécurité, la bande démarre par START (console) ou par un bouton explicite dans l'app. */
+(function (root) {
+  'use strict';
+  const isNode = typeof module !== 'undefined' && module.exports;
+  const B = isNode ? require('./ble.js') : root.WC.BLE;
+  const SP = isNode ? require('./sport.js') : root.WC.SP;
+  const { Emitter, clock } = B;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ------------------------------------------------------------------ décodage FTMS (testable sans Bluetooth)
+  // Treadmill Data 0x2ACD
+  function parseTreadmillData(dv, prev) {
+    const d = Object.assign({}, prev || {});
+    const f = dv.getUint16(0, true); let o = 2;
+    try {
+      if (!(f & 0x0001)) { d.speed = dv.getUint16(o, true) / 100; o += 2; }
+      if (f & 0x0002) o += 2;                                                       // vitesse moyenne
+      if (f & 0x0004) { d.dist = dv.getUint16(o, true) + (dv.getUint8(o + 2) << 16); o += 3; }
+      if (f & 0x0008) { d.incline = dv.getInt16(o, true) / 10; o += 4; }           // pente + angle de rampe
+      if (f & 0x0010) o += 4;                                                       // dénivelés
+      if (f & 0x0020) o += 1;                                                       // allure instantanée
+      if (f & 0x0040) o += 1;                                                       // allure moyenne
+      if (f & 0x0080) o += 5;                                                       // énergie
+      if (f & 0x0100) { const hr = dv.getUint8(o); d.hr = hr > 0 ? hr : null; o += 1; }
+      if (f & 0x0200) o += 1;                                                       // MET
+      if (f & 0x0400) { d.elapsed = dv.getUint16(o, true); o += 2; }
+    } catch (e) { /* trame tronquée : on garde ce qui a été lu */ }
+    d.ts = Date.now();
+    return d;
+  }
+  // Fitness Machine Status 0x2ADA
+  function parseStatus(dv) {
+    const op = dv.getUint8(0);
+    const st = { op };
+    if (op === 0x02) st.kind = 'userstop';
+    else if (op === 0x03) st.kind = 'safety';
+    else if (op === 0x04) st.kind = 'userstart';
+    else if (op === 0x05 && dv.byteLength >= 3) { st.kind = 'targetspeed'; st.speed = dv.getUint16(1, true) / 100; }
+    else if (op === 0xFF) st.kind = 'ctrllost';
+    return st;
+  }
+
+  // ------------------------------------------------------------------ tapis réel
+  class Treadmill extends Emitter {
+    constructor() {
+      super();
+      this.state = 'disconnected'; this.name = ''; this.device = null;
+      this.data = { speed: 0, dist: null, incline: null, hr: null, ts: 0 };
+      this.canSpeed = false; this.range = { min: 1, max: 14, inc: 0.1 };
+      this.target = null; this.cp = null; this._q = Promise.resolve(); this._pending = null; this.log = [];
+    }
+    _log(m) { this.log.push(new Date().toLocaleTimeString() + ' ' + m); if (this.log.length > 60) this.log.shift(); }
+    async connect(avoidId) {
+      if (!B.bluetoothAvailable()) throw new Error('Bluetooth Web indisponible : ouvre l’app dans Chrome sur Android.');
+      const device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'DOMYOS' }, { namePrefix: 'Domyos' }, { services: [0x1826] }], optionalServices: [0x1826, 0x180A] });
+      if (avoidId && device.id === avoidId) throw new Error('Ça, c’est ton KICKR. Choisis le tapis (nom commençant souvent par DOMYOS).');
+      this.device = device; this.name = device.name || 'Tapis de course';
+      device.addEventListener('gattserverdisconnected', () => this._onDisconnect());
+      this._want = true;
+      await this._setup();
+      return this.name;
+    }
+    async _setup() {
+      this.state = 'connecting'; this.emit('state', this.state);
+      const server = await this.device.gatt.connect();
+      const svc = await server.getPrimaryService(0x1826);
+      let td;
+      try { td = await svc.getCharacteristic(0x2ACD); }
+      catch (e) { this.disconnect(); throw new Error('Cet appareil n’envoie pas de données de tapis de course. As-tu activé le FTMS dans l’app Domyos E-Connected ?'); }
+      td.addEventListener('characteristicvaluechanged', e => { this.data = parseTreadmillData(e.target.value, this.data); this.emit('data', this.data); });
+      await td.startNotifications();
+      // ce que le tapis sait faire : bit 0 des « Target Setting Features » = vitesse pilotable
+      let known = false;
+      try { const f = await (await svc.getCharacteristic(0x2ACC)).readValue(); this.targets = f.getUint32(4, true); this.canSpeed = !!(this.targets & 1); this.canIncline = !!(this.targets & 2); known = true; } catch (e) { this.canSpeed = false; }
+      try { const r = await (await svc.getCharacteristic(0x2AD4)).readValue(); this.range = { min: r.getUint16(0, true) / 100, max: r.getUint16(2, true) / 100, inc: (r.getUint16(4, true) / 100) || 0.1 }; } catch (e) { /* plage par défaut */ }
+      try {
+        const cp = await svc.getCharacteristic(0x2AD9);
+        cp.addEventListener('characteristicvaluechanged', e => this._onCP(e.target.value));
+        await cp.startNotifications();
+        this.cp = cp;
+      } catch (e) { this.cp = null; }
+      try {
+        const st = await svc.getCharacteristic(0x2ADA);
+        st.addEventListener('characteristicvaluechanged', e => this._onStatus(parseStatus(e.target.value)));
+        await st.startNotifications();
+      } catch (e) { /* facultatif */ }
+      if (this.cp && (this.canSpeed || !known)) {
+        const r = await this._cmd([0x00], 0x00).catch(() => 0); // demande de contrôle
+        this.control = r === 1 || r === 'timeout';
+        if (!known) this.canSpeed = r === 1;
+        if (r === 5) this.emit('warn', 'Le tapis est déjà piloté par une autre application (E-Connected, Kinomap, Zwift…). Ferme-la, puis reconnecte le tapis.');
+      } else this.control = false;
+      if (!this.cp) this.canSpeed = false;
+      this._log(`connecté · pilotage vitesse ${this.canSpeed ? 'oui' : 'non'} · ${this.range.min}–${this.range.max} km/h`);
+      this.state = 'connected'; this.emit('state', this.state);
+    }
+    _onCP(dv) {
+      if (dv.byteLength < 3 || dv.getUint8(0) !== 0x80) return;
+      const op = dv.getUint8(1), res = dv.getUint8(2);
+      if (res !== 1) this._log('réponse ' + op.toString(16) + ' → ' + res);
+      if (res === 5) this.control = false;
+      if (this._pending && this._pending.op === op) { const p = this._pending; this._pending = null; p.done(res); }
+    }
+    _onStatus(st) {
+      if (st.kind === 'ctrllost') this.control = false;
+      if (st.kind) this.emit('status', st);
+    }
+    // commandes envoyées une par une, avec réponse attendue
+    _cmd(bytes, op) {
+      const run = () => new Promise(resolve => {
+        if (!this.cp) return resolve(0);
+        const to = setTimeout(() => { this._pending = null; resolve('timeout'); }, 2500);
+        this._pending = { op, done: r => { clearTimeout(to); resolve(r); } };
+        const buf = new Uint8Array(bytes);
+        (this.cp.writeValueWithResponse ? this.cp.writeValueWithResponse(buf) : this.cp.writeValue(buf)).catch(() => { clearTimeout(to); this._pending = null; resolve(0); });
+      });
+      const p = this._q.then(run, run); this._q = p.catch(() => {}); return p;
+    }
+    async setSpeed(kmh) {
+      if (!this.canSpeed) return false;
+      const v = Math.round(clamp(kmh, this.range.min, this.range.max) / this.range.inc) * this.range.inc;
+      const raw = Math.round(v * 100);
+      let r = await this._cmd([0x02, raw & 0xFF, raw >> 8], 0x02);
+      if (r === 5) { await this._cmd([0x00], 0x00); r = await this._cmd([0x02, raw & 0xFF, raw >> 8], 0x02); }
+      if (r === 1 || r === 'timeout') { this.target = Math.round(v * 10) / 10; this.emit('target', this.target); return true; }
+      return false;
+    }
+    start() { return this._cmd([0x07], 0x07); }
+    pause() { return this._cmd([0x08, 0x02], 0x08); }
+    stop() { return this._cmd([0x08, 0x01], 0x08); }
+    async _onDisconnect() {
+      this.state = 'disconnected'; this.data = Object.assign({}, this.data, { speed: 0 }); this.emit('state', this.state);
+      for (let a = 1; a <= 20 && this._want; a++) {
+        this.state = 'reconnecting'; this.emit('state', this.state);
+        await sleep(Math.min(8000, 1000 * a));
+        try { await this._setup(); return; } catch (e) { /* on réessaie */ }
+      }
+      this.state = 'disconnected'; this.emit('state', this.state);
+    }
+    disconnect() { this._want = false; try { this.device && this.device.gatt.disconnect(); } catch (e) { /* */ } this.state = 'disconnected'; this.emit('state', this.state); }
+  }
+
+  // ------------------------------------------------------------------ tapis simulé (mode démo et tests)
+  class SimTreadmill extends Emitter {
+    constructor() {
+      super();
+      this.state = 'disconnected'; this.name = 'DOMYOS RUN100 démo'; this.canSpeed = true; this.control = true;
+      this.range = { min: 1, max: 14, inc: 0.1 }; this.data = { speed: 0, dist: 0, incline: 1, hr: null, ts: 0 };
+      this.target = 0; this.running = false; this.accel = 1.2; // km/h par seconde
+    }
+    async connect() {
+      this.state = 'connected'; this.emit('state', this.state);
+      this._last = clock.now();
+      this._t = setInterval(() => this._tick(), 200);
+      return this.name;
+    }
+    _tick() {
+      const now = clock.now(), dt = Math.max(0, (now - this._last) / 1000); this._last = now;
+      const goal = this.running ? this.target : 0;
+      const v = this.data.speed, step = this.accel * dt;
+      const speed = Math.abs(goal - v) <= step ? goal : v + Math.sign(goal - v) * step;
+      const dist = (this.data.dist || 0) + (v + speed) / 2 / 3.6 * dt;
+      this.data = Object.assign({}, this.data, { speed: Math.round(speed * 100) / 100, dist, ts: Date.now() });
+      this.emit('data', this.data);
+    }
+    async setSpeed(kmh) { const v = Math.round(clamp(kmh, this.range.min, this.range.max) * 10) / 10; this.target = v; this.emit('target', v); this.emit('status', { kind: 'targetspeed', speed: v, fromApp: true }); return true; }
+    // la console : START, + / –, STOP
+    userStart() { if (!this.running) { this.running = true; if (!this.target) this.target = 1; this.emit('status', { kind: 'userstart' }); } }
+    userSpeed(v) { this.target = Math.round(v * 10) / 10; this.emit('status', { kind: 'targetspeed', speed: this.target }); }
+    userStop() { this.running = false; this.emit('status', { kind: 'userstop' }); }
+    async start() { await sleep(300); this.userStart(); return 1; }
+    async pause() { this.running = false; this.emit('status', { kind: 'userstop', fromApp: true }); return 1; }
+    async stop() { return this.pause(); }
+    disconnect() { clearInterval(this._t); this.running = false; this.data = Object.assign({}, this.data, { speed: 0 }); this.state = 'disconnected'; this.emit('state', this.state); }
+  }
+
+  // ------------------------------------------------------------------ séance de course sur tapis
+  // vitesse cible d'une étape (km/h) : milieu de la plage d'allure, × intensité
+  function stepSpeed(s, prof, intensity) {
+    if (s.k === 'rest') return null;
+    const r = SP.paceRange(s, 'run', prof);
+    if (!r || !(r[0] > 0)) return null;
+    const pace = (r[0] + r[1]) / 2;
+    return Math.round(3600 / pace * (intensity || 1) * 10) / 10;
+  }
+  const fmtKmh = v => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+
+  class TreadRunner extends Emitter {
+    // o : { workout, tree, prof, tm, hr, control, maxSpeed, intensity, restore }
+    constructor(o) {
+      super();
+      this.o = o; this.tm = o.tm; this.prof = o.prof || {};
+      this.workout = o.workout; this.tree = o.tree;
+      this.steps = SP.flatten(o.tree, 'run', this.prof);
+      this.intensity = o.intensity || 1;
+      this.control = o.control !== false && !!this.tm.canSpeed;
+      this.maxSpeed = Math.min(o.maxSpeed || 99, (this.tm.range && this.tm.range.max) || 99);
+      this.minSpeed = (this.tm.range && this.tm.range.min) || 1;
+      this.state = 'ready'; this.idx = 0; this.elapsed = 0; this.distance = 0;
+      this.stepT0 = 0; this.stepD0 = 0; this.samples = []; this.laps = []; this.pauses = [];
+      this.cmd = null; this._cmdAt = 0; this._acc = 1; this._pre = -1; this.override = false; this._dev = 0; this._still = 0; this._soon = -1; this._hrAdj = 0;
+      this.startTime = null; this._nextSample = 0;
+      this._offStatus = this.tm.on ? this.tm.on('status', st => this._status(st)) : null;
+    }
+    get step() { return this.steps[this.idx] || null; }
+    get next() { return this.steps[this.idx + 1] || null; }
+    get total() { return this.steps.reduce((a, s) => a + s.dur, 0); }
+    // vitesse max prévue de la séance (avant forme du jour et plafond du tapis)
+    planMax() { const long = this.steps.filter(s => s.dur >= 30); return Math.max(0, ...(long.length ? long : this.steps).map(s => stepSpeed(s, this.prof, 1) || 0)); }
+    // vitesse visée pour l'étape courante
+    targetSpeed(s) {
+      s = s || this.step; if (!s) return null;
+      const base = stepSpeed(s, this.prof, this.intensity);
+      if (base === null) return null;
+      return clamp(Math.round((base + (s === this.step ? this._hrAdj : 0)) * 10) / 10, this.minSpeed, this.maxSpeed);
+    }
+    // étape en distance (fractionné « 800 m ») ou en temps
+    isDist(s) { s = s || this.step; return !!(s && s.dist !== undefined && s.d === undefined); }
+    stepProgress() {
+      const s = this.step; if (!s) return { done: 0, left: 0 };
+      if (this.isDist(s)) { const done = this.distance - this.stepD0; return { done, left: Math.max(0, s.dist - done), dist: true }; }
+      const done = this.elapsed - this.stepT0; return { done, left: Math.max(0, s.dur - done) };
+    }
+    // ---- cycle
+    begin() {
+      // attend que la bande tourne (START sur la console, ou bouton « Lancer le tapis »)
+      this.state = 'waiting'; this.emit('state', this.state);
+      this._last = clock.now();
+      this._timer = setInterval(() => this._tick(), 250);
+    }
+    async launch() { // bouton explicite de l'app : démarre la bande
+      if (this.tm.start) await this.tm.start();
+    }
+    _go() {
+      if (!this.startTime) { this.startTime = clock.now(); this._nextSample = this.startTime; this._openLap(); }
+      this.state = 'running'; this.emit('state', this.state);
+      this._send(true);
+    }
+    pause() {
+      if (this.state !== 'running') return;
+      this.state = 'paused'; this._pauseFrom = clock.now(); this.emit('state', this.state);
+      if (this.tm.pause && this.control) this.tm.pause();
+    }
+    async resume() {
+      if (this.state !== 'paused') return;
+      if ((this.tm.data.speed || 0) < 0.5 && this.control && this.tm.start) await this.tm.start();
+      this._resumeWanted = true;
+    }
+    skip() { if (this.state === 'running' || this.state === 'paused') this._advance(); }
+    setIntensity(v) { this.intensity = clamp(Math.round(v * 1000) / 1000, 0.7, 1.2); this._send(true); this.emit('intensity', this.intensity); }
+    stop() { clearInterval(this._timer); this._closeLap(); this.state = 'done'; if (this._offStatus) this._offStatus(); }
+    // ---- consignes de vitesse
+    _send(force) {
+      if (!this.control || this.override || this.state !== 'running') return;
+      const v = this.targetSpeed(); if (v === null) return;
+      if (!force && this.cmd !== null && Math.abs(v - this.cmd) < 0.05) return;
+      if (this._pre === this.idx - 1 && this.cmd !== null && Math.abs(v - this.cmd) < 0.05) return; // déjà envoyée en avance
+      this.cmd = v; this._cmdAt = clock.now(); this._dev = 0;
+      this.tm.setSpeed(v);
+      this.emit('cmd', v);
+    }
+    _status(st) {
+      if (st.kind === 'targetspeed' && !st.fromApp && this.state === 'running' && this.control && this.cmd !== null) {
+        // changement fait sur la console ou la télécommande : l'utilisateur reprend la main pour cette étape
+        if (Math.abs(st.speed - this.cmd) > 0.05 && clock.now() - this._cmdAt > 1500) this._takeOver(st.speed);
+      }
+      if (st.kind === 'safety') this.emit('safety');
+    }
+    _takeOver(v) { if (this.override) return; this.override = true; this.emit('override', v); }
+    _tick() {
+      const now = clock.now(), dt = Math.min(60, Math.max(0, (now - this._last) / 1000)); this._last = now;
+      const d = this.tm.data || {}, v = d.speed || 0;
+      const moving = v >= 0.5;
+      if (this.state === 'waiting') { if (moving) this._go(); return; }
+      if (this.state === 'paused') {
+        if (moving) {
+          this.pauses.push({ from: this._pauseFrom, to: now }); this._resumeWanted = false;
+          this._go(); this.emit('resumed');
+        }
+        return;
+      }
+      if (this.state !== 'running') return;
+      // bande arrêtée (STOP, clé de sécurité) : pause automatique
+      if (!moving) { this._still += dt; if (this._still >= 2.5) { this._still = 0; this.state = 'paused'; this._pauseFrom = now; this.emit('state', this.state); this.emit('beltstop'); } return; }
+      this._still = 0;
+      // distance : celle du tapis si elle est cohérente, sinon intégrée
+      let dd = v / 3.6 * dt;
+      if (d.dist !== null && d.dist !== undefined && this._lastDist !== undefined) { const td = d.dist - this._lastDist; if (td >= 0 && td <= dd * 1.6 + 1.5) dd = td; }
+      this._lastDist = d.dist;
+      // écart prolongé avec la consigne (tapis sans notification de statut) → reprise en main manuelle
+      if (this.control && !this.override && this.cmd !== null) {
+        const ramp = Math.abs(this.cmd - (this._cmdFrom !== undefined ? this._cmdFrom : this.cmd)) / 0.5 + 5;
+        if ((now - this._cmdAt) / 1000 > ramp && Math.abs(v - this.cmd) > 0.4) { this._dev += dt; if (this._dev > 6) this._takeOver(v); } else this._dev = 0;
+      }
+      // accélération réelle du tapis (km/h par seconde), mesurée pendant les changements de vitesse
+      if (this.cmd !== null && this._lastV !== undefined && dt > 0) {
+        const dv = v - this._lastV;
+        if (Math.abs(this.cmd - this._lastV) > 0.3 && Math.abs(dv) > 0.05 && Math.sign(dv) === Math.sign(this.cmd - this._lastV)) this._acc = clamp(this._acc * 0.8 + Math.abs(dv) / dt * 0.2, 0.3, 3);
+      }
+      this._lastV = v;
+      // on avance par pas d'au plus 1 s : frontières d'étapes et échantillons restent justes même si le
+      // téléphone a pris du retard (ou si l'horloge est accélérée en démo)
+      let rem = dt, tcur = now - dt * 1000;
+      while (rem > 1e-6 && this.state === 'running') {
+        const sub = Math.min(1, rem); rem -= sub; tcur += sub * 1000;
+        this.elapsed += sub; this.distance += dt > 0 ? dd * sub / dt : 0;
+        this._hrControl(sub);
+        // annonce 5 s avant le changement d'étape
+        const pr = this.stepProgress(), nx = this.next;
+        const leftS = pr.dist ? pr.left / Math.max(0.5, v / 3.6) : pr.left;
+        if (nx && leftS <= 5.2 && this._soon !== this.idx) { this._soon = this.idx; this.emit('soon', { step: nx, speed: this.targetSpeed(nx) }); }
+        // la bande met quelques secondes à changer de vitesse : on envoie la consigne un peu avant
+        // (la moitié du temps de rampe), pour que l'allure moyenne de l'étape corresponde à la cible
+        if (nx && this.control && !this.override && this._pre !== this.idx && this.cmd !== null) {
+          const tv = this.targetSpeed(nx);
+          if (tv !== null && Math.abs(tv - this.cmd) >= 0.3 && leftS <= Math.min(3, Math.abs(tv - this.cmd) / this._acc / 2)) {
+            this._pre = this.idx; this._cmdFrom = this.cmd; this.cmd = tv; this._cmdAt = tcur; this._dev = 0;
+            this.tm.setSpeed(tv); this.emit('cmd', tv);
+          }
+        }
+        // échantillons (1 par seconde de course)
+        while (this._nextSample <= tcur) {
+          this.samples.push({ t: this._nextSample, s: Math.round(v * 100) / 100, d: Math.round(this.distance * 10) / 10, hr: this._hr(), tg: this.cmd !== null && !this.override ? this.cmd : (this.targetSpeed() || null), inc: d.incline !== null && d.incline !== undefined ? d.incline : undefined });
+          this._nextSample += 1000;
+        }
+        if (pr.left <= 0) this._advance();
+      }
+      this.emit('tick');
+    }
+    _hr() { const h = this.o.hr; if (h && h.state === 'connected' && h.bpm && (!h.ts || Date.now() - h.ts < 5000)) return h.bpm; const d = this.tm.data || {}; return d.hr || null; }
+    // étapes en FC : +/- 0,2 km/h toutes les 30 s pour rester dans la zone
+    _hrControl(dt) {
+      const s = this.step; if (!s || s.k !== 'hr' || !this.control || this.override) return;
+      const hr = this._hr(); if (!hr) return;
+      this._hrT = (this._hrT || 0) + dt;
+      if (this.elapsed - this.stepT0 < 60 || this._hrT < 30) return;
+      this._hrT = 0;
+      const [lo, hi] = SP.hrRange(s.z, this.prof);
+      if (hr > hi + 2) this._hrAdj -= 0.2; else if (hr < lo - 2) this._hrAdj += 0.2; else return;
+      this._send();
+    }
+    _openLap() { const s = this.step; if (!s) return; this.laps.push({ from: this.samples.length, to: null, label: s.l || SP.stepName(s, 'run'), intensity: s.k === 'trot' || s.k === 'marche' ? 'rest' : (this.idx === 0 && s.k === 'E' ? 'warmup' : 'active'), target: this.targetSpeed(s), dist: this.isDist(s) ? s.dist : undefined }); }
+    _closeLap() { const l = this.laps[this.laps.length - 1]; if (l && l.to === null) l.to = this.samples.length; }
+    _advance() {
+      this._closeLap();
+      // la nouvelle étape commence à la frontière prévue (pas de dérive d'un tick à l'autre)
+      const prev = this.step;
+      if (prev && this.isDist(prev) && this.distance - this.stepD0 >= prev.dist) { this.stepD0 += prev.dist; this.stepT0 = this.elapsed; }
+      else if (prev && !this.isDist(prev) && this.elapsed - this.stepT0 >= prev.dur) { this.stepT0 += prev.dur; this.stepD0 = this.distance; }
+      else { this.stepT0 = this.elapsed; this.stepD0 = this.distance; } // étape passée à la main
+      this.idx++; this.override = false; this._hrAdj = 0; this._hrT = 0; this._dev = 0;
+      if (this.idx >= this.steps.length) { this.stop(); this.emit('done'); return; }
+      this._openLap();
+      this._cmdFrom = this.cmd;
+      this.emit('step', { step: this.step, idx: this.idx });
+      this._send(true);
+    }
+    // ---- bilan
+    summary() {
+      const S = this.samples, n = S.length;
+      const H = S.map(s => s.hr).filter(Boolean), V = S.map(s => s.s);
+      const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+      const dist = n ? S[n - 1].d : 0;
+      const w = this.prof.weight || 70;
+      return {
+        duration: n, elapsed: n ? Math.round((S[n - 1].t - S[0].t) / 1000) + 1 : 0, distance: dist,
+        avgSpeed: n ? dist / n : 0, maxSpeed: V.length ? Math.max(...V) / 3.6 : 0,
+        avgHr: H.length ? Math.round(avg(H)) : 0, maxHr: H.length ? Math.max(...H) : 0,
+        calories: Math.round(w * dist / 1000 * 1.0), avgPace: dist > 0 ? n / (dist / 1000) : 0,
+        incline: S.some(s => s.inc !== undefined) ? Math.round(avg(S.filter(s => s.inc !== undefined).map(s => s.inc)) * 10) / 10 : undefined
+      };
+    }
+    lapSummary(l) {
+      const seg = this.samples.slice(l.from, l.to === null ? undefined : l.to);
+      return lapStats(seg, l, this.samples);
+    }
+  }
+  function lapStats(seg, l, all) {
+    if (!seg.length) return null;
+    const i0 = all.indexOf(seg[0]);
+    const d0 = i0 > 0 ? all[i0 - 1].d : 0, dist = seg[seg.length - 1].d - d0;
+    const H = seg.map(s => s.hr).filter(Boolean);
+    return { n: seg.length, dist, pace: dist > 0 ? seg.length / (dist / 1000) : 0, avgSpeed: dist / seg.length * 3.6, avgHr: H.length ? H.reduce((a, b) => a + b, 0) / H.length : 0, target: l.target, label: l.label, intensity: l.intensity };
+  }
+
+  const api = { Treadmill, SimTreadmill, TreadRunner, parseTreadmillData, parseStatus, stepSpeed, lapStats, fmtKmh };
+  if (isNode) module.exports = api;
+  else root.WC = Object.assign(root.WC || {}, { TM: api });
+})(typeof window !== 'undefined' ? window : globalThis);
+
 /* D Tri Training — journal multisport : activités, charge, nutrition, renfo, poids, bilans, imports */
 (function (root) {
   'use strict';
@@ -4191,7 +4601,7 @@ Il faut exactement ${nWeeks} semaines.`,
 /* D Tri Training — interface : noyau */
 (function () {
   'use strict';
-  const { W, M, FIT, BLE, RUN, SVC, PLAN, SP, J, TRI, AD } = window.WC;
+  const { W, M, FIT, BLE, RUN, SVC, PLAN, SP, J, TRI, AD, TM } = window.WC;
   const { LS, Store, Strava, AI, Intervals } = SVC;
   const VERSION = '0.9.0';
   const APP = 'D Tri Training';
@@ -4223,6 +4633,7 @@ Il faut exactement ${nWeeks} semaines.`,
     strength: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 7v10M18 7v10M3 9v6M21 9v6M6 12h12"/></svg>',
     other: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
     scale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 9a5 5 0 018 0M12 9l1.5-2"/></svg>',
+    tread: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h15.5a2.5 2.5 0 0 0 0-5H16"/><path d="M16 12l-3-7h-2"/><circle cx="6" cy="20" r="1"/><circle cx="17" cy="20" r="1"/></svg>',
     pedal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="6.5" width="12" height="11" rx="3"/><path d="M2.5 12H9M15 6.5v11"/></svg>',
     cad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 12l4.5-4.5M17 17h3"/></svg>',
     heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20s-7-4.5-9-9a4.8 4.8 0 019-3 4.8 4.8 0 019 3c-2 4.5-9 9-9 9z"/></svg>',
@@ -4248,7 +4659,7 @@ Il faut exactement ${nWeeks} semaines.`,
 
   // ------------------------------------------------------------------ état
   const DEFAULT_PROFILE = { name: '', ftp: 200, weight: 75, hrMax: 185, hrRest: 55, lthr: '', runT: 330, css: 130, pool: 25, levels: { swim: 3, bike: 3, run: 3 }, years: '', hours: 7 };
-  const DEFAULT_SETTINGS = { trainerHint: '6AE5', autoPause: true, beeps: true, voice: true, vibrate: true, scaleToLevel: true, sportType: 'VirtualRide', autoStrava: false, step: 0.02, runTarget: 'pace', powerSrc: 'pedals', powerMatch: true, hasPedals: false };
+  const DEFAULT_SETTINGS = { trainerHint: '6AE5', autoPause: true, beeps: true, voice: true, vibrate: true, scaleToLevel: true, sportType: 'VirtualRide', autoStrava: false, step: 0.02, runTarget: 'pace', powerSrc: 'pedals', powerMatch: true, hasPedals: false, tmControl: true, tmMax: 14, hasTreadmill: false };
   const now = new Date();
   const S = {
     profile: LS.get('profile', null),
@@ -4330,22 +4741,25 @@ Il faut exactement ${nWeeks} semaines.`,
   }
 
   // ------------------------------------------------------------------ appareils (KICKR)
-  const real = { trainer: new BLE.Trainer(), hr: new BLE.HeartRate(), cad: new BLE.CadenceSensor(), pm: new BLE.PowerMeter() };
+  const real = { trainer: new BLE.Trainer(), hr: new BLE.HeartRate(), cad: new BLE.CadenceSensor(), pm: new BLE.PowerMeter(), tm: new TM.Treadmill() };
   const sim = { trainer: new BLE.SimTrainer(() => P().ftp), hr: null };
   sim.hr = new BLE.SimHeartRate(() => sim.trainer.data.power, P);
   sim.pm = new BLE.SimPowerMeter(sim.trainer);
+  sim.tm = new TM.SimTreadmill();
+  // cardio simulé pour la course sur tapis : suit la vitesse rapportée à l'allure seuil
+  sim.hrRun = new BLE.SimHeartRate(() => (sim.tm.data.speed || 0) / (3600 / (P().runT || 300)) * (P().ftp || 250), P);
   let dev = S.demo ? sim : real;
 
   function setDemo(on) {
     S.demo = on; LS.set('demo', on);
-    if (on) { real.trainer.disconnect(); real.hr.disconnect(); real.cad.disconnect(); real.pm.disconnect(); dev = sim; sim.trainer.connect(); sim.hr.connect(); }
-    else { sim.trainer.disconnect(); sim.hr.disconnect(); sim.pm.disconnect(); dev = real; }
+    if (on) { real.trainer.disconnect(); real.hr.disconnect(); real.cad.disconnect(); real.pm.disconnect(); real.tm.disconnect(); dev = sim; sim.trainer.connect(); sim.hr.connect(); }
+    else { sim.trainer.disconnect(); sim.hr.disconnect(); sim.pm.disconnect(); sim.tm.disconnect(); sim.hrRun.disconnect && sim.hrRun.state === 'connected' && sim.hrRun.disconnect(); dev = real; }
     bindDevices(); render();
   }
   function bindDevices() {
-    [real.trainer, real.hr, real.cad, real.pm, sim.trainer, sim.hr, sim.pm].filter(Boolean).forEach(d => { d._ui && d._ui.forEach(off => off()); d._ui = []; });
+    [real.trainer, real.hr, real.cad, real.pm, real.tm, sim.trainer, sim.hr, sim.pm, sim.tm].filter(Boolean).forEach(d => { d._ui && d._ui.forEach(off => off()); d._ui = []; });
     dev.trainer._ui.push(dev.trainer.on('warn', m => toast(m, true)));
-    [dev.trainer, dev.hr, dev.cad, dev.pm].filter(Boolean).forEach(d => {
+    [dev.trainer, dev.hr, dev.cad, dev.pm, dev.tm].filter(Boolean).forEach(d => {
       d._ui.push(d.on('state', () => { updateDevices(); }));
       d._ui.push(d.on('data', () => { throttleDevices(); }));
     });
@@ -4477,6 +4891,15 @@ Il faut exactement ${nWeeks} semaines.`,
       set('dv-pm-btn', m.state === 'disconnected' ? 'Connecter' : 'Réglages');
       const tp = $('#tb-pm'); if (tp) tp.className = 'dot ' + (on ? 'on' : (m.state === 'connecting' || m.state === 'reconnecting') ? 'wait' : '');
     }
+    const tmd = dev.tm;
+    if (tmd) {
+      const on = tmd.state === 'connected', d = tmd.data || {};
+      set('dv-tm-name', esc(on ? tmd.name : 'Tapis de course'));
+      set('dv-tm-state', tmd.state === 'disconnected' ? 'Domyos Run 100 et tapis FTMS' : lab(tmd.state) + (on ? (tmd.canSpeed ? ' · vitesse pilotable' : ' · lecture seule') : ''));
+      set('dv-tm-live', on ? `${TM.fmtKmh(d.speed || 0)}<span class="small muted"> km/h</span>` : '');
+      set('dv-tm-btn', tmd.state === 'disconnected' ? 'Connecter' : 'Réglages');
+      const tt = $('#tb-tm'); if (tt) tt.className = 'dot ' + (on ? 'on' : (tmd.state === 'connecting' || tmd.state === 'reconnecting') ? 'wait' : '');
+    }
     const cls = d => 'dot ' + (d.state === 'connected' ? 'on' : (d.state === 'connecting' || d.state === 'reconnecting') ? 'wait' : '');
     const a = $('#tb-tr'), b = $('#tb-hr');
     if (a) a.className = cls(t); if (b) b.className = cls(h);
@@ -4599,7 +5022,9 @@ Il faut exactement ${nWeeks} semaines.`,
       else { await connectTrainer(); if (dev.trainer.state !== 'connected') return; }
     }
     const runner = new RUN.Runner({ workout: { id: w.id, name: w.name, cat: w.cat, level: w.level, test: w.test, source: w.source }, tree: opts.tree || w.tree, ftp: P().ftp, trainer: dev.trainer, hr: dev.hr, cad: dev.cad || null, pm: dev.pm && dev.pm.state === 'connected' ? dev.pm : null, powerSrc: S.settings.powerSrc || 'pedals', match: S.settings.powerMatch !== false, autoPause: S.settings.autoPause, restore: opts.restore });
-    if (opts.intensity && opts.intensity !== 1) runner.intensity = opts.intensity;
+    // forme du jour : intensité choisie dans la fiche, sinon celle réglée aujourd'hui (jamais pour un test)
+    const fi = opts.intensity !== undefined ? opts.intensity : (opts.restore || w.cat === 'test' || w.test ? 1 : formeGet('bike'));
+    if (fi && fi !== 1) runner.intensity = fi;
     runner.planSessionId = opts.planSessionId || (opts.restore && opts.restore.planSessionId) || null;
     S.runner = runner;
     openPlayer(runner);
@@ -4903,6 +5328,23 @@ Il faut exactement ${nWeeks} semaines.`,
     const off = Math.abs(r.duration - minutes * 60) > 120 ? ` Au plus près de ${minutes} min : ${W.fmtDur(r.duration, true)}.` : '';
     return `<div class="notice small" style="margin:10px 0">Adaptée à ${minutes} min. ${esc(r.summary)}${off}</div>`;
   }
+  // ---- forme du jour : un coefficient par sport, retenu pour la journée
+  const localDay = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  function formeGet(sport) { const f = LS.get('forme', null); return f && f.date === localDay() && f[sport] ? f[sport] : 1; }
+  function formeSet(sport, v) { const f = LS.get('forme', null), d = localDay(); const o = f && f.date === d ? f : { date: d }; o[sport] = Math.round(v * 1000) / 1000; LS.set('forme', o); }
+  const clampInt = v => Math.max(0.7, Math.min(1.2, Math.round(v * 1000) / 1000));
+  // réglage « valeur max » + raccourcis en % ; k = préfixe des actions (data-k ou data-t)
+  function formeHTML(attr, value, unit, pct, note) {
+    return `<div class="forme"><button ${attr}="fmax-" aria-label="Moins">−</button><div class="fv"><b>${value}</b> ${unit}<span>${pct === 1 ? 'comme prévu' : r0(pct * 100) + ' % de la séance prévue'}${note ? ' · ' + note : ''}</span></div><button ${attr}="fmax+" aria-label="Plus">+</button></div>
+      <div class="chips" style="margin-top:8px">${[[0.9, 'Fatigué −10 %'], [0.95, '−5 %'], [1, 'Normal'], [1.03, '+3 %'], [1.05, 'En forme +5 %']].map(([v, l]) => `<button class="chip ${Math.abs(v - pct) < 0.0005 ? 'on' : ''}" ${attr}="fpct" data-v="${v}">${l}</button>`).join('')}</div>`;
+  }
+  // puissance de l'effort le plus dur (W) : étapes de 30 s et plus, hors portions libres
+  // (les accélérations de l'échauffement ne servent pas de référence)
+  const bikeMax = (tree, ftp) => {
+    const st = W.flatten(tree, ftp).filter(s => !s.free), long = st.filter(s => s.d >= 30);
+    return Math.max(0, ...(long.length ? long : st).map(s => Math.max(s.p || 0, s.p2 || 0) * ftp));
+  };
+
   // séance adaptée (arbre + nom) pour un sport donné
   function adapted(w, tree, minutes, sport) {
     if (!minutes) return { tree, name: w.name, changed: false };
@@ -4916,7 +5358,7 @@ Il faut exactement ${nWeeks} semaines.`,
     const p = P();
     const scaled = S.settings.scaleToLevel && w.source === 'lib' && w.level !== p.level && w.cat !== 'test';
     const fixed = w.cat === 'test' || !!w.test;
-    let intensity = 1, adapt = scaled, minutes = fixed ? 0 : (opts.minutes !== undefined ? opts.minutes : (S.libMinutes || 0));
+    let intensity = fixed ? 1 : formeGet('bike'), adapt = scaled, minutes = fixed ? 0 : (opts.minutes !== undefined ? opts.minutes : (S.libMinutes || 0));
     const baseTree = () => adapt ? W.scaleForLevel(w.tree, w.level, p.level) : w.tree;
     const cur = () => adapted(w, baseTree(), minutes, 'bike');
     const body = () => {
@@ -4929,8 +5371,7 @@ Il faut exactement ${nWeeks} semaines.`,
         <div class="statline" style="margin-bottom:6px"><div class="stat"><b>${W.fmtDur(st.duration, true)}</b><span>durée</span></div><div class="stat"><b>${r0(st.tss * intensity * intensity)}</b><span>TSS</span></div><div class="stat"><b>${fx(st.IF * intensity, 2)}</b><span>IF</span></div><div class="stat"><b>${r0(st.kj * intensity)}</b><span>kJ</span></div>${cads.length ? `<div class="stat"><b>${cads.length > 1 ? cads[0] + '–' + cads[cads.length - 1] : cads[0]}</b><span>rpm visés</span></div>` : ''}</div>
         ${durationChips(minutes, W.totalDuration(baseTree()), fixed)}${adaptNotice(r, minutes)}
         ${scaled ? `<div class="switch"><span>Adapter à mon niveau (${W.LEVELS[p.level]})<br><span class="small muted">séance prévue niveau ${w.level}/5</span></span><input type="checkbox" data-k="adapt" ${adapt ? 'checked' : ''}></div>` : ''}
-        <div style="margin:10px 0 4px" class="small muted">Intensité</div>
-        <div class="chips">${[0.9, 0.95, 1, 1.05, 1.1].map(v => `<button class="chip ${v === intensity ? 'on' : ''}" data-k="int" data-v="${v}">${r0(v * 100)} %</button>`).join('')}</div>
+        ${!fixed && bikeMax(tree, p.ftp) > 0 ? `<div style="margin:14px 0 6px" class="small muted">Forme du jour : puissance de l’effort le plus dur</div>${formeHTML('data-k', r0(bikeMax(tree, p.ftp) * intensity), 'W', intensity, formeGet('bike') !== 1 && Math.abs(formeGet('bike') - intensity) < 0.0005 ? 'réglée aujourd’hui' : '')}` : ''}
         <div class="btn-row" style="margin:16px 0"><button class="btn primary" data-k="start">${IC.play} Démarrer</button><button class="btn" data-k="fav" aria-label="Favori">${S.favs.includes(w.id) ? IC.starOn : IC.star}</button><button class="btn" data-k="edit">Modifier</button>${(w.source === 'gen' || w.source === 'ai' || r.changed) && !S.custom.some(c => c.id === w.id) ? '<button class="btn" data-k="save">Enregistrer</button>' : ''}</div>
         <h3 style="margin:6px 0">Déroulé</h3>${stepsHTML(tree, p.ftp, intensity)}
         ${w.source === 'custom' || (w.source === 'ai' && S.custom.some(c => c.id === w.id)) ? '<button class="btn danger block" style="margin-top:14px" data-k="del">Supprimer cette séance</button>' : ''}`;
@@ -4940,7 +5381,11 @@ Il faut exactement ${nWeeks} semaines.`,
     sh.addEventListener('click', async e => {
       const b = e.target.closest('[data-k]'); if (!b) return;
       const k = b.dataset.k;
-      if (k === 'int') { intensity = +b.dataset.v; re(); }
+      if (k === 'fpct') { intensity = +b.dataset.v; formeSet('bike', intensity); re(); }
+      else if (k === 'fmax-' || k === 'fmax+') {
+        const mx = bikeMax(cur().tree, p.ftp), now = Math.round(mx * intensity);
+        intensity = clampInt((now + (k === 'fmax+' ? 5 : -5)) / mx); formeSet('bike', intensity); re();
+      }
       else if (k === 'dur') { minutes = +b.dataset.v; re(); }
       else if (k === 'start') { const r = cur(); closeSheet(); startWorkout(Object.assign({}, w, { name: r.name }), { tree: r.tree, intensity, planSessionId: w.planSessionId || opts.planSessionId }); }
       else if (k === 'fav') { S.favs = S.favs.includes(w.id) ? S.favs.filter(x => x !== w.id) : S.favs.concat(w.id); LS.set('favs', S.favs); re(); if (S.view === 'library') render(); }
@@ -5087,6 +5532,256 @@ Il faut exactement ${nWeeks} semaines.`,
       <p class="small muted" style="margin-top:8px">Les pédales lisent ${gap >= 0 ? '+' : ''}${fx(gap, 1)} % par rapport au KICKR${Math.abs(gap) <= 5 ? ', un écart normal (pertes de transmission, étalonnage)' : ' : pense à étalonner les pédales et à faire un spindown du KICKR'}.${s.bal ? ` Équilibre moyen : gauche ${fx(s.bal, 1)} %, droite ${fx(100 - s.bal, 1)} %.` : ''}${s.cover < 0.95 ? ` Pédales captées ${r0(s.cover * 100)} % du temps.` : ''}</p>`;
   }
 
+  // ------------------------------------------------------------------ tapis de course (Domyos Run 100, FTMS)
+  const TM_COL = '#34c77b';
+  const kmh = v => TM.fmtKmh(v || 0);
+  const paceOf = v => v > 0.5 ? SP.fmtPace(3600 / v) : '–';
+
+  async function connectTm() {
+    const t = dev.tm; if (!t) return;
+    if (t.state !== 'disconnected') { openTmSheet(); return; }
+    try {
+      const n = await t.connect(real.trainer.device ? real.trainer.device.id : null);
+      if (!S.settings.hasTreadmill) { S.settings.hasTreadmill = true; saveSettings(); }
+      toast(t.canSpeed ? `Tapis connecté : ${n}. L’app peut régler sa vitesse.` : `Tapis connecté : ${n}. Il n’accepte pas de consigne de vitesse : l’app t’indiquera la vitesse à régler.`);
+    } catch (e) { if (e.name !== 'NotFoundError') toast(e.message, true); }
+    updateDevices(); render();
+  }
+
+  function openTmSheet() {
+    const t = dev.tm; if (!t) return;
+    const body = () => {
+      const on = t.state === 'connected', ctl = S.settings.tmControl !== false;
+      const maxR = (t.range && t.range.max) || 14, maxes = [10, 12, 14, 16, 18, 20].filter(v => v <= Math.max(maxR, 10));
+      const cur = Math.min(S.settings.tmMax || maxR, maxR);
+      return `<span class="tag" style="color:${TM_COL}">Tapis de course</span>
+        <h2 style="margin-top:8px">${on ? esc(t.name) : 'Tapis non connecté'}</h2>
+        <div class="statline" style="margin:12px 0" id="tm-live">${tmLiveHTML(t)}</div>
+        ${on ? (t.canSpeed
+          ? `<div class="notice small" style="margin:6px 0 12px"><b>Ton tapis accepte que l’app règle sa vitesse</b> (${kmh(t.range.min)} à ${kmh(t.range.max)} km/h).</div>`
+          : `<div class="notice small" style="margin:6px 0 12px"><b>Ton tapis envoie ses données mais n’accepte pas de consigne de vitesse.</b> Pendant la séance, l’app t’annonce la vitesse à régler sur la console. Vérifie que le FTMS est bien activé dans Domyos E-Connected, puis reconnecte le tapis.</div>`) : ''}
+        <div class="switch"><span>Régler la vitesse automatiquement<br><span class="small muted">À chaque étape, l’app envoie la vitesse au tapis. Un appui sur + / – de la console te rend la main jusqu’à l’étape suivante.</span></span><input type="checkbox" data-k="ctl" ${ctl ? 'checked' : ''}></div>
+        <div class="small muted" style="margin:14px 0 6px">Vitesse maximale autorisée</div>
+        <div class="chips">${maxes.map(v => `<button class="chip ${cur === v ? 'on' : ''}" data-k="max" data-v="${v}">${v} km/h</button>`).join('')}</div>
+        <div class="btn-row" style="margin-top:16px">${on ? '<button class="btn" data-k="off">Déconnecter</button>' : '<button class="btn primary" data-k="on">Connecter</button>'}</div>
+        <details class="small muted" style="margin-top:14px"><summary>Si le tapis n’apparaît pas</summary><p style="margin-top:6px">Une seule fois : dans l’app Domyos E-Connected, active le FTMS, ferme E-Connected, puis éteins et rallume le tapis. Ensuite, aucune autre app (E-Connected, Kinomap, Zwift) ne doit être connectée au tapis pendant la séance. Le tapis apparaît souvent sous un nom commençant par DOMYOS ; ton KICKR peut aussi apparaître dans la liste, ne le choisis pas.</p></details>`;
+    };
+    const sh = openSheet(`<div id="tm-body">${body()}</div>`);
+    const re = () => { $('#tm-body', sh).innerHTML = body(); };
+    const live = setInterval(() => { const el = $('#tm-live', sh); if (!el || !document.body.contains(sh)) { clearInterval(live); return; } el.innerHTML = tmLiveHTML(t); }, 700);
+    sh.addEventListener('click', async e => {
+      const b = e.target.closest('[data-k]'); if (!b) return;
+      const k = b.dataset.k;
+      if (k === 'max') { S.settings.tmMax = +b.dataset.v; saveSettings(); re(); }
+      else if (k === 'off') { t.disconnect(); updateDevices(); re(); }
+      else if (k === 'on') { await connectTm(); re(); }
+    });
+    sh.addEventListener('change', e => { if (e.target.dataset.k === 'ctl') { S.settings.tmControl = e.target.checked; saveSettings(); } });
+  }
+  function tmLiveHTML(t) {
+    const on = t.state === 'connected', d = t.data || {};
+    return `<div class="stat"><b>${on ? kmh(d.speed) : '–'}</b><span>km/h</span></div><div class="stat"><b>${on ? paceOf(d.speed) : '–'}</b><span>allure /km</span></div><div class="stat"><b>${on && d.incline !== null && d.incline !== undefined ? fx(d.incline, 1) : '–'}</b><span>pente %</span></div>`;
+  }
+
+  // ---- lancement d'une séance de course sur tapis
+  async function startTreadRun(w, opts) {
+    opts = opts || {};
+    if (!S.profile) { openOnboarding(); return; }
+    if (!dev.tm || dev.tm.state !== 'connected') {
+      if (S.demo) await dev.tm.connect();
+      else {
+        const choice = await ask('Tapis non connecté', 'Connecte ton tapis pour que l’app suive la séance et règle la vitesse.', [
+          { label: 'Connecter le tapis', value: 'conn', cls: 'primary' }, { label: 'Essayer en mode démo', value: 'demo' }, { label: 'Annuler', value: null }]);
+        if (!choice) return;
+        if (choice === 'demo') { setDemo(true); await dev.tm.connect(); }
+        else { await connectTm(); if (dev.tm.state !== 'connected') return; }
+      }
+      updateDevices();
+    }
+    if (S.demo && sim.hrRun.state !== 'connected') sim.hrRun.connect();
+    const run = new TM.TreadRunner({
+      workout: { id: w.id, name: w.name, cat: w.cat, sport: 'run' }, tree: w.tree, prof: P(), tm: dev.tm,
+      hr: S.demo ? sim.hrRun : dev.hr, control: S.settings.tmControl !== false, maxSpeed: S.settings.tmMax || 14
+    });
+    run.planSessionId = opts.planSessionId || w.planSessionId || null;
+    S.treadRun = run;
+    openTreadPlayer(run);
+  }
+
+  function openTreadPlayer(run) {
+    const el = document.createElement('div');
+    el.id = 'player'; el.className = 'tread';
+    const st = SP.stats(run.tree, 'run', run.prof);
+    if (run.workout.cat !== 'test') run.intensity = formeGet('run');
+    const cap = run.maxSpeed;
+    const formeBox = () => {
+      const pm = run.planMax(), top = Math.round(pm * run.intensity * 10) / 10;
+      return `<div class="small muted" style="margin:4px 0 6px">Forme du jour : vitesse de l’effort le plus rapide</div>${formeHTML('data-t', kmh(top), 'km/h', run.intensity, '')}
+        ${top > cap + 0.05 ? `<p class="small" style="margin:8px auto 0;max-width:320px;color:var(--warn, #f2a93b)">La séance monte à ${kmh(top)} km/h, au-dessus de ta limite de ${kmh(cap)} km/h : seuls les passages les plus rapides seraient plafonnés. <button class="linkbtn" data-t="fcap">Tout réduire en proportion (${kmh(cap)} km/h max)</button></p>` : ''}
+        <p class="small muted" style="margin:8px 0 0">Première consigne : ${kmh(run.targetSpeed(run.steps[0]))} km/h.</p>`;
+    };
+    const first = run.targetSpeed(run.steps[0]);
+    el.innerHTML = `
+      <div class="p-head"><button class="iconbtn" data-t="close" aria-label="Terminer">${IC.close}</button><div class="title ellipsis">${esc(run.workout.name)}</div><span class="p-elapsed" id="t-el">0:00</span></div>
+      <div class="p-main">
+        <div class="p-interval"><span class="zone-edge" id="t-zedge"></span><div style="padding-left:6px;min-width:0"><div class="rep" id="t-rep"></div><div class="lbl ellipsis" id="t-lbl">—</div><div class="next ellipsis" id="t-next"></div></div><div class="remain" id="t-rem">0:00</div></div>
+        <div class="p-power"><div class="p-srctag" id="t-mode"><i></i><span id="t-modetxt"></span></div><div class="big" id="t-spd">0,0<small>km/h</small></div><div class="target" id="t-tg"></div><div class="t-pace" id="t-pace"></div></div>
+        <div class="p-metrics"><div class="m"><b id="t-hr">–</b><span>bpm</span></div><div class="m"><b id="t-dist">0,00</b><span>km</span></div><div class="m"><b id="t-avg">–</b><span>allure moy.</span></div><div class="m"><b id="t-inc">–</b><span>pente %</span></div></div>
+        <div class="p-chart"><canvas id="t-chart"></canvas></div>
+      </div>
+      <div class="p-controls">
+        <div class="adj"><button data-t="minus" aria-label="Moins vite">−</button><div class="val" id="t-adj"><b>100 %</b>vitesse des consignes</div><button data-t="plus" aria-label="Plus vite">+</button></div>
+        <button class="btn" data-t="pause" id="t-pause">${IC.pause}<span>Pause</span></button>
+        <button class="btn" data-t="skip">${IC.skip}<span>Passer</span></button>
+        <button class="btn" data-t="end" aria-label="Terminer la séance">${IC.more}</button>
+      </div>
+      <div class="startcover" id="t-cover"><div class="stack" id="t-coverbody">
+        <h2>${esc(run.workout.name)}</h2><p class="muted">${W.fmtDur(st.duration, true)} · ${fmtKm(st.distance, 'run')} · sur tapis</p>
+        <div id="t-forme" style="width:100%;max-width:340px;margin:0 auto">${formeBox()}</div>
+        <p class="small muted" style="max-width:300px;margin:0 auto">${run.control ? 'L’app réglera la vitesse à chaque étape. Tu peux reprendre la main à tout moment avec + / – sur la console.' : `Le tapis ne prend pas de consigne : l’app t’annoncera la vitesse à régler (${kmh(first)} km/h pour commencer).`}</p>
+        <button class="btn primary" data-t="ready">${IC.play} Je suis prêt</button><button class="btn ghost" data-t="cancel">Annuler</button></div></div>`;
+    document.body.appendChild(el);
+    document.body.style.overflow = 'hidden';
+    Hist.push();
+    let alertT = null, lastChart = 0;
+    const set = (id, v) => { const e = document.getElementById(id); if (e && e.innerHTML !== v) e.innerHTML = v; };
+    const banner = (t, ms) => { let a = $('#p-alert'); if (!a) { a = document.createElement('div'); a.id = 'p-alert'; a.className = 'p-alert'; el.appendChild(a); } a.textContent = t; clearTimeout(alertT); alertT = setTimeout(() => a.remove(), ms || 6000); };
+    const stepTxt = s => run.isDist(s) ? (s.dist >= 1000 ? fx(s.dist / 1000, s.dist % 1000 ? 1 : 0) + ' km' : s.dist + ' m') : W.fmtDur(s.d !== undefined ? s.d : s.dur, true);
+
+    function update() {
+      const s = run.step; if (!s) return;
+      const d = dev.tm.data || {}, v = d.speed || 0, tg = run.override ? null : run.targetSpeed();
+      $('#t-zedge').style.background = SP.stepColor(s, 'run');
+      const pr = run.stepProgress();
+      set('t-rem', pr.dist ? r0(pr.left) + '<small style="font-size:.45em"> m</small>' : W.fmtDur(Math.ceil(pr.left)));
+      set('t-lbl', esc(s.l || SP.stepName(s, 'run')));
+      set('t-rep', s.rep ? `Répétition ${s.rep.i}/${s.rep.n}` : '');
+      const nx = run.next;
+      set('t-next', nx ? `Ensuite : ${stepTxt(nx)} à ${kmh(run.targetSpeed(nx))} km/h${nx.l ? ' (' + esc(nx.l) + ')' : ''}` : 'Dernière étape');
+      set('t-spd', `${kmh(v)}<small>km/h</small>`);
+      set('t-pace', `${paceOf(v)} <span class="muted">/km</span>`);
+      if (tg !== null) {
+        const diff = Math.round((v - tg) * 10) / 10, col = Math.abs(diff) <= 0.2 ? 'var(--ok)' : diff > 0 ? 'var(--z5)' : 'var(--z2)';
+        set('t-tg', `Cible <b>${kmh(tg)}</b> km/h · ${paceOf(tg)}/km<span class="delta" style="background:${col};color:#0D1B2E">${diff > 0 ? '+' : ''}${kmh(diff)}</span>`);
+      } else set('t-tg', `Vitesse libre · consigne ${kmh(run.targetSpeed())} km/h`);
+      const mode = !run.control ? ['console', `règle ${kmh(run.targetSpeed())} km/h sur la console`, '#62b0ff'] : run.override ? ['manual', 'vitesse à la main jusqu’à l’étape suivante', '#f2a93b'] : ['auto', 'vitesse réglée par l’app', TM_COL];
+      set('t-modetxt', mode[1]); $('#t-mode').style.setProperty('--c', mode[2]);
+      const hr = run._hr(); set('t-hr', hr ? String(hr) : '–');
+      set('t-dist', fx(run.distance / 1000, 2));
+      set('t-avg', run.distance > 50 ? SP.fmtPace(run.elapsed / (run.distance / 1000)) : '–');
+      set('t-inc', d.incline !== null && d.incline !== undefined ? fx(d.incline, 1) : '–');
+      set('t-el', `${W.fmtDur(run.elapsed)} / ${W.fmtDur(run.total)}`);
+      set('t-adj', `<b>${r0(run.intensity * 100)} %</b>vitesse des consignes`);
+      const pb = $('#t-pause'), want = run.state === 'paused' ? `${IC.play}<span>Reprendre</span>` : `${IC.pause}<span>Pause</span>`;
+      if (pb.innerHTML !== want) pb.innerHTML = want;
+      if (Date.now() - lastChart > 1000) { lastChart = Date.now(); drawTreadChart(run); }
+    }
+    run.on('tick', update);
+    run.on('state', s => {
+      if (s === 'running' && $('#t-cover')) { $('#t-cover').remove(); say('C’est parti. ' + (run.step.l || SP.stepName(run.step, 'run')) + (run.control ? ', ' + kmh(run.targetSpeed()) + ' kilomètres heure' : '')); }
+      update();
+    });
+    run.on('soon', ({ step, speed }) => { beep(880, 0.12); if (speed !== null) say(`Dans 5 secondes, ${run.control ? '' : 'règle '}${kmh(speed).replace(',', ' virgule ')} kilomètres heure`); });
+    run.on('step', ({ step }) => {
+      vibrate([120, 60, 120]); beep(1320, 0.25);
+      say(`${step.l ? step.l + '. ' : ''}${stepTxt(step).replace("'", ' minutes ').replace('"', ' secondes').replace(' m', ' mètres')}`);
+    });
+    run.on('override', v => { banner(`Vitesse réglée à la console (${kmh(v)} km/h) : l’app te laisse la main jusqu’à l’étape suivante.`); });
+    run.on('beltstop', () => { vibrate([200]); banner('Tapis arrêté : séance en pause. Relance le tapis (START) pour continuer.', 8000); });
+    run.on('resumed', () => toast('C’est reparti'));
+    run.on('safety', () => banner('Clé de sécurité retirée : le tapis s’est arrêté.', 8000));
+    run.on('done', () => { say('Séance terminée. Bravo ! Ralentis et arrête le tapis quand tu veux.'); finishTread(run, cleanup); });
+    function cleanup() { run.stop(); keepAwake(false); el.remove(); document.body.style.overflow = ''; S.treadRun = null; Hist.pop(1); }
+
+    el.addEventListener('click', async e => {
+      const b = e.target.closest('[data-t]'); if (!b) return;
+      const k = b.dataset.t;
+      if (k === 'fpct' || k === 'fmax-' || k === 'fmax+' || k === 'fcap') {
+        const pm = run.planMax();
+        if (k === 'fpct') run.setIntensity(+b.dataset.v);
+        else if (k === 'fcap') run.setIntensity(cap / pm);
+        else run.setIntensity((Math.round(pm * run.intensity * 10) / 10 + (k === 'fmax+' ? 0.1 : -0.1)) / pm);
+        formeSet('run', run.intensity);
+        $('#t-forme').innerHTML = formeBox();
+        return;
+      }
+      if (k === 'ready') {
+        keepAwake(true); beep(660, 0.1);
+        run.begin();
+        $('#t-coverbody').innerHTML = `<h2>Démarre le tapis</h2><p class="muted" style="max-width:300px;margin:0 auto">Clé de sécurité en place, monte sur le tapis et appuie sur <b>START</b>. La séance démarre dès que la bande tourne.</p>
+          ${run.control ? '<button class="btn primary" data-t="launch">Lancer le tapis depuis l’app</button>' : ''}${S.demo ? '<button class="btn" data-t="demostart">Simuler START (démo)</button>' : ''}<button class="btn ghost" data-t="cancel">Annuler</button>`;
+        say('Appuie sur START pour démarrer le tapis');
+      } else if (k === 'launch') {
+        const box = $('#t-coverbody');
+        for (let n = 3; n > 0; n--) { box.innerHTML = `<h2 style="font-size:64px">${n}</h2><p class="muted">Le tapis démarre…</p>`; beep(880, 0.1); await new Promise(r => setTimeout(r, 1000)); }
+        run.launch();
+      } else if (k === 'demostart') { dev.tm.userStart && dev.tm.userStart(); }
+      else if (k === 'cancel') { cleanup(); }
+      else if (k === 'pause') { run.state === 'paused' ? run.resume() : run.pause(); update(); }
+      else if (k === 'skip') run.skip();
+      else if (k === 'plus' || k === 'minus') { run.setIntensity(run.intensity + (k === 'plus' ? 0.02 : -0.02)); update(); }
+      else if (k === 'end' || k === 'close') {
+        const v = await ask('Terminer la séance ?', 'Le tapis continue de tourner : arrête-le avec STOP.', [{ label: 'Enregistrer et terminer', value: 'save', cls: 'primary' }, { label: 'Continuer', value: null }, { label: 'Abandonner sans enregistrer', value: 'drop' }]);
+        if (v === 'save') finishTread(run, cleanup);
+        else if (v === 'drop') cleanup();
+      }
+    });
+    update();
+  }
+
+  // graphique du lecteur : consignes (blocs), vitesse réelle, FC
+  function drawTreadChart(run) {
+    const cv = document.getElementById('t-chart'); if (!cv) return;
+    const { ctx, w, h } = setupCanvas(cv);
+    const total = Math.max(run.total, run.elapsed + 1), X = t => t / total * w;
+    const vmax = Math.max(16, ...run.steps.map(s => run.targetSpeed(s) || 0)) * 1.05, Y = v => h - v / vmax * h * 0.96;
+    run.steps.forEach(s => {
+      const v = run.targetSpeed(s) || 0;
+      ctx.fillStyle = SP.stepColor(s, 'run'); ctx.globalAlpha = 0.7;
+      ctx.fillRect(X(s.start), Y(v), Math.max(1, X(s.dur) - 0.5), h - Y(v));
+    });
+    ctx.globalAlpha = 1;
+    const smp = run.samples; if (!smp.length) return;
+    const t0 = smp[0].t;
+    ctx.beginPath(); ctx.strokeStyle = '#EEF3FA'; ctx.lineWidth = 1.6;
+    smp.forEach((s, i) => { const x = X(i), y = Y(s.s); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    if (smp.some(s => s.hr)) {
+      ctx.beginPath(); ctx.strokeStyle = 'rgba(255,95,95,.9)'; ctx.lineWidth = 1.2; let st = false;
+      const hm = run.prof.hrMax || 190;
+      smp.forEach((s, i) => { if (!s.hr) return; const y = h - (s.hr - 60) / (hm - 60) * h * 0.95; if (!st) { ctx.moveTo(X(i), y); st = true; } else ctx.lineTo(X(i), y); });
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#FFCB2F'; ctx.fillRect(X(run.elapsed) - 1, 0, 2, h);
+  }
+
+  // ---- fin de séance : activité « course sur tapis »
+  async function finishTread(run, cleanup) {
+    const samples = run.samples.slice();
+    run.stop(); cleanup();
+    if (samples.length < 60) { toast('Séance de moins d’une minute : rien n’a été enregistré'); render(); return; }
+    const sm = run.summary();
+    const id = 'tm' + samples[0].t;
+    const detail = { id, sport: 'run', intensity: run.intensity, startTime: samples[0].t, name: run.workout.name, samples, laps: run.laps.map(l => Object.assign({}, l, { to: l.to === null ? samples.length : l.to })), pauses: run.pauses, summary: sm, dsl: SP.toDSL(run.tree, 'run'), control: run.control };
+    const a = { id, sport: 'run', sub: 'treadmill', source: 'treadmill', cat: run.workout.cat, name: run.workout.name, startTime: samples[0].t, summary: sm, planSessionId: run.planSessionId, completed: run.idx >= run.steps.length };
+    try { await saveActivity(a, detail); } catch (e) { toast('Impossible d’enregistrer : ' + e.message, true); }
+    if (a.planSessionId) markPlanDone(a.planSessionId, a.id); else autoLinkPlan(a);
+    render();
+    openActivity(a.id, { fresh: true });
+    if (S.settings.autoStrava && Strava.isConnected()) uploadStrava(a, detail);
+  }
+
+  // fiche activité : intervalles d'une course sur tapis
+  function treadLapsHTML(detail) {
+    if (!detail || !detail.laps || detail.laps.length < 2) return '';
+    const rows = detail.laps.map(l => TM.lapStats(detail.samples.slice(l.from, l.to), l, detail.samples)).filter(r => r && r.n >= 10);
+    if (rows.length < 2) return '';
+    return `<h3 style="margin:16px 0 6px">Intervalles</h3><table class="laps"><tr><th>Étape</th><th>Durée</th><th>Dist.</th><th>Cible</th><th>Réalisé</th><th>FC</th></tr>${rows.map(r => {
+      const ok = r.target && Math.abs(r.avgSpeed - r.target) <= 0.3;
+      return `<tr><td class="ellipsis" style="max-width:110px">${esc(r.label || '')}</td><td>${W.fmtDur(r.n, true)}</td><td>${r0(r.dist)} m</td><td>${r.target ? paceOf(r.target) : '–'}</td><td><b style="color:${r.target ? (ok ? 'var(--ok)' : 'var(--warn, #f2a93b)') : 'inherit'}">${paceOf(r.avgSpeed)}</b></td><td>${r.avgHr ? r0(r.avgHr) : '–'}</td></tr>`;
+    }).join('')}</table><p class="small muted" style="margin-top:6px">Allures en min/km.${detail.control ? ' La vitesse a été réglée par l’app.' : ''}</p>`;
+  }
+
   // ------------------------------------------------------------------ navigation & vues
   const TABS = [['home', 'Accueil', IC.home], ['journal', 'Journal', IC.journal], ['library', 'Séances', IC.list], ['plan', 'Plan', IC.cal], ['bilan', 'Bilan', IC.chart]];
   function renderTabs() {
@@ -5104,7 +5799,7 @@ Il faut exactement ${nWeeks} semaines.`,
     const dot = d => d.state === 'connected' ? 'on' : (d.state === 'connecting' || d.state === 'reconnecting') ? 'wait' : '';
     const ini = (P().name || '').trim().slice(0, 1).toUpperCase();
     return `<div class="topbar"><div class="grow"><h1>${esc(title)}</h1>${sub ? `<div class="small muted">${esc(sub)}</div>` : ''}</div>
-      <button class="devpill" data-act="tab" data-v="home" aria-label="État des capteurs"><span class="dot ${dot(t)}" id="tb-tr"></span>KICKR<span class="dot ${dot(h)}" id="tb-hr" style="margin-left:6px"></span>FC${dev.pm && (S.settings.hasPedals || dev.pm.state !== 'disconnected') ? `<span class="dot ${dot(dev.pm)}" id="tb-pm" style="margin-left:6px"></span>Pédales` : ''}</button>
+      <button class="devpill" data-act="tab" data-v="home" aria-label="État des capteurs"><span class="dot ${dot(t)}" id="tb-tr"></span>KICKR<span class="dot ${dot(h)}" id="tb-hr" style="margin-left:6px"></span>FC${dev.pm && (S.settings.hasPedals || dev.pm.state !== 'disconnected') ? `<span class="dot ${dot(dev.pm)}" id="tb-pm" style="margin-left:6px"></span>Pédales` : ''}${dev.tm && (S.settings.hasTreadmill || dev.tm.state !== 'disconnected') ? `<span class="dot ${dot(dev.tm)}" id="tb-tm" style="margin-left:6px"></span>Tapis` : ''}</button>
       <button class="avatar ${S.view === 'profile' ? 'on' : ''}" data-act="tab" data-v="profile" aria-label="Profil et réglages">${ini ? esc(ini) : IC.user}</button></div>`;
   }
 
@@ -5202,11 +5897,12 @@ Il faut exactement ${nWeeks} semaines.`,
     const last = actsSorted().slice(0, 3);
     if (last.length) html += `<section class="block"><div class="block-head"><h2>Dernières activités</h2><button class="btn ghost sm" data-act="tab" data-v="journal">Journal</button></div><div class="card" style="padding:2px 14px">${last.map(actRow).join('')}</div></section>`;
     // home trainer
-    html += `<section class="block"><div class="block-head"><h2>Home trainer</h2><label class="row small muted" style="gap:8px">Mode démo <span class="switch" style="padding:0;border:0"><input type="checkbox" data-act="demo" ${S.demo ? 'checked' : ''}></span></label></div>
+    html += `<section class="block"><div class="block-head"><h2>Appareils</h2><label class="row small muted" style="gap:8px">Mode démo <span class="switch" style="padding:0;border:0"><input type="checkbox" data-act="demo" ${S.demo ? 'checked' : ''}></span></label></div>
       <div class="card" style="padding:4px 16px">
         <div class="device"><div class="ico">${IC.bike}</div><div class="grow"><div><b id="dv-tr-name">Home trainer</b></div><div class="small muted" id="dv-tr-state">—</div></div><div class="live" id="dv-tr-live"></div><button class="btn sm" id="dv-tr-btn" data-act="connTrainer">Connecter</button></div>
         <div class="device"><div class="ico">${IC.heart}</div><div class="grow"><div><b id="dv-hr-name">Ceinture cardio</b></div><div class="small muted" id="dv-hr-state">—</div></div><div class="live" id="dv-hr-live"></div><button class="btn sm" id="dv-hr-btn" data-act="connHr">Connecter</button></div>
         <div class="device" id="dv-pm"><div class="ico" style="color:${SRC_COL.pedals}">${IC.pedal}</div><div class="grow"><div><b id="dv-pm-name">Pédales Assioma Duo</b></div><div class="small muted" id="dv-pm-state">Facultatif</div></div><div class="live" id="dv-pm-live"></div><button class="btn sm" id="dv-pm-btn" data-act="connPm">Connecter</button></div>
+        <div class="device" id="dv-tm"><div class="ico">${IC.tread}</div><div class="grow"><div><b id="dv-tm-name">Tapis de course</b></div><div class="small muted" id="dv-tm-state">Domyos Run 100 et tapis FTMS</div></div><div class="live" id="dv-tm-live"></div><button class="btn sm" id="dv-tm-btn" data-act="connTm">Connecter</button></div>
         <div class="device" id="dv-cad" ${S.demo ? 'hidden' : ''}><div class="ico">${IC.cad || IC.bike}</div><div class="grow"><div><b id="dv-cad-name">Capteur de cadence</b></div><div class="small muted" id="dv-cad-state">Facultatif</div></div><div class="live" id="dv-cad-live"></div><button class="btn sm" id="dv-cad-btn" data-act="connCad">Connecter</button></div>
       </div></section>`;
     return html;
@@ -5272,7 +5968,7 @@ Il faut exactement ${nWeeks} semaines.`,
     if (!a) { toast('Activité introuvable', true); return; }
     const detail = a.hasDetail ? await Store.getSession(id).catch(() => null) : null;
     const p = P(), s = a.summary || {};
-    const src = { kickr: 'Home trainer KICKR', strava: 'Importée de Strava', fit: 'Fichier FIT', manual: 'Saisie manuelle' }[a.source] || '';
+    const src = { kickr: 'Home trainer KICKR', treadmill: 'Tapis de course', strava: 'Importée de Strava', fit: 'Fichier FIT', manual: 'Saisie manuelle' }[a.source] || '';
     const stat = (v, l) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`;
     let stats = [stat(W.fmtDur(s.duration || 0, true), 'durée')];
     if (a.sport === 'bike') stats.push(stat(r0(s.avgP) || '–', 'W moy.'), stat(r0(s.np) || '–', 'NP'), stat(s.IF ? fx(s.IF, 2) : '–', 'IF'), stat(s.kj ? r0(s.kj) : '–', 'kJ'));
@@ -5284,6 +5980,7 @@ Il faut exactement ${nWeeks} semaines.`,
     if (s.elevation) stats.push(stat(r0(s.elevation) + ' m', 'dénivelé'));
     stats.push(stat(r0(s.tss), 'charge' + (a.loadMethod ? ' (' + a.loadMethod + ')' : '')), stat(r0(a.kcalOut), 'kcal dépensées'));
     const kickr = a.source === 'kickr' && detail;
+    const tread = a.source === 'treadmill' && detail;
     const lapRows = kickr ? detail.laps.map(l => Object.assign(M.lapSummary(detail.samples, l.from, l.to), { label: l.label, intensity: l.intensity, c: l.c })).filter(l => l.n >= 10) : [];
     const cadCell = l => { if (!l.avgCad) return '–'; const v = r0(l.avgCad); if (!l.c) return String(v); const ok = Math.abs(v - l.c) <= 5; return `<b style="color:${ok ? 'var(--ok)' : 'var(--warn, #f2a93b)'}">${v}</b><span class="muted">/${l.c}</span>`; };
     const sh = openSheet(`
@@ -5293,18 +5990,20 @@ Il faut exactement ${nWeeks} semaines.`,
       <div class="statline" style="margin:12px 0">${stats.join('')}</div>
       ${detail && detail.samples && detail.samples.length > 10 ? '<canvas class="chart" id="a-chart" height="140"></canvas>' : ''}
       ${kickr && detail.summary && detail.summary.sources && detail.summary.sources.n ? `<div class="legend"><span><i style="background:#EEF3FA"></i>${detail.powerRef === 'pedals' ? 'Pédales' : 'KICKR'} (référence)</span><span><i style="background:${detail.powerRef === 'pedals' ? SRC_COL.trainer : SRC_COL.pedals}"></i>${detail.powerRef === 'pedals' ? 'KICKR' : 'Pédales'}</span><span><i style="background:#ff5f5f"></i>FC</span><span><i class="dash"></i>cadence</span></div>` : ''}
+      ${detail && detail.intensity && Math.abs(detail.intensity - 1) > 0.004 ? `<p class="small muted" style="margin-top:8px">Consignes à ${r0(detail.intensity * 100)} % de la séance prévue (forme du jour).</p>` : ''}
       ${kickr ? sourcesCompareHTML(detail.summary || s, detail) : ''}
-      ${a.sport === 'run' && s.distance && s.duration >= 1500 && s.duration <= 2700 ? `<button class="btn ghost sm" data-k="runtest">C’était un test de 30 min ? Mettre à jour mes seuils</button>` : ''}
+      ${a.sport === 'run' && (a.source !== 'treadmill' || a.cat === 'test') && s.distance && s.duration >= 1500 && s.duration <= 2700 ? `<button class="btn ghost sm" data-k="runtest">C’était un test de 30 min ? Mettre à jour mes seuils</button>` : ''}
       ${a.sport === 'strength' ? strengthSummaryHTML(a) : ''}
       <h3 style="margin:18px 0 8px">Ressenti</h3><div id="a-feel">${feelEditorHTML(a)}</div>
       <h3 style="margin:18px 0 8px">Nutrition pendant la séance</h3><div id="a-nut">${nutritionHTML(a)}</div>
-      ${kickr ? `<h3 style="margin:18px 0 8px">Exporter</h3>
+      ${tread ? treadLapsHTML(detail) : ''}
+      ${kickr || tread ? `<h3 style="margin:18px 0 8px">Exporter</h3>
         <div class="btn-row"><button class="btn primary" data-k="strava" id="s-strava">${a.stravaId ? 'Voir sur Strava' : 'Envoyer vers Strava'}</button><button class="btn" data-k="garmin">Garmin Connect</button></div>
         <div class="btn-row" style="margin-top:8px"><button class="btn sm" data-k="fit">Fichier .FIT</button><button class="btn sm" data-k="tcx">Fichier .TCX</button>${navigator.share ? '<button class="btn sm" data-k="share">Partager</button>' : ''}</div>` : ''}
-      ${a.stravaId && !kickr ? `<div class="btn-row" style="margin-top:14px"><button class="btn sm" data-k="strava">Voir sur Strava</button></div>` : ''}
+      ${a.stravaId && !kickr && !tread ? `<div class="btn-row" style="margin-top:14px"><button class="btn sm" data-k="strava">Voir sur Strava</button></div>` : ''}
       ${AI.available() ? `<button class="btn block" style="margin-top:14px" data-k="ai">${IC.spark} Analyse par l’IA</button><div id="s-ai" class="small" style="margin-top:10px;white-space:pre-wrap"></div>` : ''}
       ${lapRows.length > 1 ? `<h3 style="margin:16px 0 6px">Intervalles</h3><table class="laps"><tr><th>Étape</th><th>Durée</th><th>Cible</th><th>Réalisé</th><th>rpm</th><th>FC</th></tr>${lapRows.map(l => `<tr><td class="ellipsis" style="max-width:120px">${esc(l.label || { warmup: 'Échauffement', cooldown: 'Retour au calme', rest: 'Récup', active: 'Effort' }[l.intensity] || '')}</td><td>${W.fmtDur(l.n, true)}</td><td>${l.avgTarget ? r0(l.avgTarget) : '–'}</td><td><b>${r0(l.avgP)}</b></td><td>${cadCell(l)}</td><td>${l.avgHr ? r0(l.avgHr) : '–'}</td></tr>`).join('')}</table>` : ''}
-      <div class="btn-row" style="margin-top:18px">${a.source !== 'kickr' ? '<button class="btn" data-k="edit">Modifier</button>' : ''}<button class="btn danger" data-k="del">Supprimer</button>${opts.fresh ? '<button class="btn primary" data-k="close">Terminé</button>' : ''}</div>`);
+      <div class="btn-row" style="margin-top:18px">${a.source !== 'kickr' && a.source !== 'treadmill' ? '<button class="btn" data-k="edit">Modifier</button>' : ''}<button class="btn danger" data-k="del">Supprimer</button>${opts.fresh ? '<button class="btn primary" data-k="close">Terminé</button>' : ''}</div>`);
     if (detail && detail.samples && detail.samples.length > 10) requestAnimationFrame(() => kickr ? drawSessionChart($('#a-chart', sh), detail) : drawActivityChart($('#a-chart', sh), a, detail));
     const refreshBlocks = () => { $('#a-feel', sh).innerHTML = feelEditorHTML(a); $('#a-nut', sh).innerHTML = nutritionHTML(a); };
     bindFeelNutrition(sh, a, refreshBlocks);
@@ -5359,6 +6058,12 @@ Il faut exactement ${nWeeks} semaines.`,
       ctx.beginPath(); ctx.moveTo(0, h);
       const sm = 5; for (let i = 0; i < smp.length; i++) { let acc = 0, n = 0; for (let k = Math.max(0, i - sm); k <= Math.min(smp.length - 1, i + sm); k++) { acc += smp[k][main] || 0; n++; } ctx.lineTo(X(smp[i].t), h - acc / n / mx * h); }
       ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+    }
+    if (main === 's' && smp.some(s => s.tg)) {
+      const mx = Math.max(...smp.map(s => s.s || 0), ...smp.map(s => s.tg || 0)) * 1.08 || 1;
+      ctx.beginPath(); ctx.strokeStyle = 'rgba(255,203,47,.9)'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 3]); let st = false;
+      smp.forEach(s => { if (!s.tg) { st = false; return; } const y = h - s.tg / mx * h; if (!st) { ctx.moveTo(X(s.t), y); st = true; } else ctx.lineTo(X(s.t), y); });
+      ctx.stroke(); ctx.setLineDash([]);
     }
     if (a.sport === 'bike' && smp.some(s => s.c)) {
       ctx.beginPath(); ctx.strokeStyle = 'rgba(77,208,200,.75)'; ctx.lineWidth = 1; ctx.setLineDash([3, 2]); let st = false;
@@ -5755,7 +6460,7 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
         ${durationChips(minutes, SP.stats(w0.tree, sport, p).duration, fixed)}${adaptNotice(r, minutes)}
         ${sport === 'run' ? `<div class="small muted" style="margin:10px 0 6px">Cibles sur la montre</div><div class="chips"><button class="chip ${S.settings.runTarget !== 'hr' ? 'on' : ''}" data-k="tgt" data-v="pace">Allure</button><button class="chip ${S.settings.runTarget === 'hr' ? 'on' : ''}" data-k="tgt" data-v="hr">Fréquence cardiaque</button></div>` : ''}
         <div class="btn-row" style="margin:16px 0 8px">
-          ${sport === 'run' ? `<button class="btn primary" data-k="watch">${IC.watch} Envoyer à ma montre</button>` : `<button class="btn primary" data-k="sheet">Fiche piscine</button><button class="btn" data-k="watch">${IC.watch} Montre</button>`}
+          ${sport === 'run' ? (dev.tm && dev.tm.state === 'connected' ? `<button class="btn primary" data-k="tread">${IC.tread} Sur le tapis</button><button class="btn" data-k="watch">${IC.watch} Montre</button>` : `<button class="btn primary" data-k="watch">${IC.watch} Envoyer à ma montre</button><button class="btn" data-k="tread">${IC.tread} Sur le tapis</button>`) : `<button class="btn primary" data-k="sheet">Fiche piscine</button><button class="btn" data-k="watch">${IC.watch} Montre</button>`}
           <button class="btn" data-k="fav" aria-label="Favori">${S.favs.includes(w0.id) ? IC.starOn : IC.star}</button></div>
         <div class="btn-row"><button class="btn sm" data-k="fit">Fichier .FIT (USB)</button><button class="btn sm" data-k="copy">Copier le texte</button><button class="btn sm" data-k="log">Saisir comme faite</button><button class="btn sm" data-k="edit">Modifier</button>${(w0.source === 'gen' || w0.source === 'ai' || r.changed) && !S.custom.some(c => c.id === w0.id && !r.changed) ? '<button class="btn sm" data-k="save">Enregistrer</button>' : ''}</div>
         <h3 style="margin:16px 0 6px">Déroulé</h3>${sportStepsHTML(w.tree, sport, p)}
@@ -5769,6 +6474,7 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
       if (k === 'tgt') { S.settings.runTarget = b.dataset.v; saveSettings(); re(); }
       else if (k === 'dur') { minutes = +b.dataset.v; w = cur(); re(); }
       else if (k === 'watch') sendToWatch(w, opts.date || w.date);
+      else if (k === 'tread') { closeSheet(); startTreadRun(w, { planSessionId: opts.planSessionId || w.planSessionId }); }
       else if (k === 'sheet') openPoolSheet(w);
       else if (k === 'fit') { download(SP.buildWorkoutFit(w.tree, sport, p, w.name, S.settings.runTarget), slug(w.name) + '.fit', 'application/vnd.ant.fit'); toast('Copie ce fichier dans GARMIN/NewFiles de ta montre (câble USB)'); }
       else if (k === 'copy') copyText(w.name + '\n' + SP.toText(w.tree, sport, p));
@@ -6284,6 +6990,14 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     try {
       set('Envoi…'); if (btn) btn.disabled = true;
       const sm = detail.summary;
+      if (a.sport === 'run') {
+        const descR = `Course sur tapis ${APP} : ${fmtKm(sm.distance, 'run')} à ${SP.fmtPace(sm.duration / ((sm.distance || 1) / 1000))}/km${sm.avgHr ? ', FC moy. ' + sm.avgHr : ''}.`;
+        const rr = await Strava.upload(FIT.buildFit(detail, sm), { name: a.name, description: descR, externalId: 'd6tri-' + a.id, sportType: 'Run' }, set);
+        if (rr.activityId) { a.stravaId = rr.activityId; upsertAct(a); set('Voir sur Strava'); toast(rr.duplicate ? 'Déjà présente sur Strava' : 'Envoyée sur Strava'); }
+        else { set('Envoyer vers Strava'); toast('Strava traite encore le fichier : vérifie dans quelques minutes'); }
+        if (btn) btn.disabled = false;
+        return;
+      }
       const so = sm.sources;
       const desc = `Séance ${APP} : NP ${r0(sm.np)} W, IF ${fx(sm.IF, 2)}, charge ${r0(sm.tss)}${a.test ? ', FTP mesurée ' + a.test.ftp + ' W' : ''}.` + (so && so.n ? ` Puissance ${detail.powerRef === 'pedals' ? 'des pédales Assioma' : 'du KICKR'} (KICKR ${r0(so.kickr)} W, pédales ${r0(so.pedals)} W${so.bal ? ', G/D ' + r0(so.bal) + '/' + r0(100 - so.bal) : ''}).` : '');
       const r = await Strava.upload(FIT.buildFit(detail, sm), { name: a.name, description: desc, externalId: 'd6tri-' + a.id, sportType: S.settings.sportType }, set);
@@ -6373,6 +7087,7 @@ Analyse l’exécution, le lien éventuel entre nutrition et sensations, et donn
     connTrainer: () => connectTrainer(),
     connCad: () => connectCad(),
     connPm: () => connectPm(),
+    connTm: () => connectTm(),
     libMin: el => { S.libMinutes = +el.dataset.v; render(); },
     ideaMin: el => { S.ideaMinutes = +el.dataset.v; render(); },
     connHr: () => connectHr(),

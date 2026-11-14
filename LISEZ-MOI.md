@@ -24,6 +24,13 @@ Ton application de triathlon sur téléphone Android : journal de toutes tes act
 - Tu as un capteur de cadence Bluetooth sur la manivelle ? Connecte-le dans Accueil → Home trainer. Il devient prioritaire sur la mesure du KICKR. Il est facultatif.
 - Dans tes propres séances, ajoute `c95` à une étape pour fixer une cadence, par exemple `5x(3m@75 c110, 2m@60 c90)`.
 
+## Forme du jour
+
+- **Vélo** : dans la fiche d’une séance, « Forme du jour » affiche la puissance de l’effort le plus dur. Baisse-la ou monte-la par pas de 5 W, ou choisis un raccourci (Fatigué −10 %, −5 %, Normal, +3 %, En forme +5 %) : toutes les consignes de la séance changent dans la même proportion.
+- **Tapis** : même principe sur l’écran de départ « Sur le tapis », avec la vitesse de l’effort le plus rapide, par pas de 0,1 km/h. Si la séance dépasse ta vitesse maximale autorisée, l’app te propose de tout réduire en proportion plutôt que de seulement plafonner les passages rapides.
+- Le réglage est retenu pour la journée, séparément pour le vélo et la course : les autres séances du jour partent avec la même forme. Les tests (FTP, seuil) ne sont jamais modifiés.
+- En cours de séance, les boutons – / + du lecteur ajustent encore de 2 % en 2 %. La fiche de l’activité rappelle le pourcentage utilisé.
+
 ## Pédales Favero Assioma Duo
 
 - **Connexion** : Accueil → Home trainer → Pédales Assioma Duo → Connecter, puis choisis l’appareil dont le nom commence par ASSIOMA. Le KICKR apparaît aussi dans la liste, car il mesure lui aussi la puissance : ne le choisis pas.
@@ -34,6 +41,17 @@ Ton application de triathlon sur téléphone Android : journal de toutes tes act
 - **Si les pédales décrochent** : le KICKR prend le relais automatiquement et la séance continue.
 - **Après la séance** : la fiche compare les deux capteurs (moyennes, écart en %, équilibre gauche/droite), et le graphique trace les deux puissances. Le fichier .FIT envoyé à Strava et Garmin contient la puissance de référence et l’équilibre gauche/droite.
 - **Étalonnage** : les Assioma font leur zéro toutes seules. Le bouton « Étalonner maintenant » force un zéro (pieds hors des pédales, manivelles immobiles).
+
+## Tapis de course (Domyos Run 100 et tapis FTMS)
+
+- **Une seule fois** : dans l’app Domyos E-Connected, active le FTMS, ferme E-Connected, puis éteins et rallume le tapis.
+- **Connexion** : Accueil → Appareils → Tapis de course → Connecter, puis choisis le tapis (nom commençant souvent par DOMYOS, pas ton KICKR). L’app indique si le tapis accepte qu’elle règle sa vitesse (« vitesse pilotable ») ou s’il envoie seulement ses données (« lecture seule »).
+- **Lancer une séance** : ouvre une séance de course → « Sur le tapis » → « Je suis prêt ». Clé de sécurité en place, appuie sur START sur la console (ou « Lancer le tapis depuis l’app », avec un compte à rebours de 3 s). La séance démarre quand la bande tourne : l’app ne démarre jamais la bande toute seule.
+- **Pendant la séance** : l’app règle la vitesse à chaque étape et annonce le changement 5 s avant. Elle envoie la consigne un peu en avance pour compenser le temps que met la bande à accélérer. Les étapes en distance (800 m…) suivent la distance du tapis. Les étapes en fréquence cardiaque ajustent la vitesse de 0,2 km/h toutes les 30 s pour rester dans la zone.
+- **Reprendre la main** : un appui sur + ou – de la console (ou de la télécommande) et l’app ne touche plus à la vitesse jusqu’à l’étape suivante. Les boutons – / + de l’app accélèrent ou ralentissent toutes les consignes de 2 %.
+- **Sécurité** : STOP ou clé retirée mettent la séance en pause. La vitesse maximale autorisée se règle dans Réglages du tapis (14 km/h par défaut, le maximum du Run 100) : une consigne plus rapide est plafonnée.
+- **Si le tapis est en lecture seule** : l’app suit et enregistre la séance, et annonce à la voix la vitesse à régler sur la console.
+- **Après la séance** : l’activité « course sur tapis » apparaît dans le Journal avec les allures visées et réalisées pour chaque intervalle, la FC et la distance. Elle s’envoie sur Strava comme une course en intérieur et sur Garmin Connect en fichier .FIT. Si tu enregistres aussi la séance avec ta Forerunner, n’envoie qu’une des deux sur Strava pour éviter le doublon.
 
 ## 1. Mise en ligne (une seule fois)
 
