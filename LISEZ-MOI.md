@@ -29,7 +29,7 @@ Ton application de triathlon sur téléphone Android : journal de toutes tes act
 Pour faire ta propre séance en pilotant la machine depuis le téléphone, sans choisir de séance : Accueil → Appareils → **Tapis libre** ou **Vélo libre** (aussi dans Séances).
 
 - **Tapis libre** : cinq boutons de vitesse (4, 8, 10, 12, 14 km/h par défaut, modifiables dans Réglages du tapis) et des réglages fins −0,5 / −0,1 / +0,1 / +0,5 km/h. Si le tapis tourne déjà, la séance démarre tout de suite et l’app prend la main. S’il est à l’arrêt, un appui sur une vitesse lance un compte à rebours de 3 s, puis la bande démarre à cette vitesse. Le bouton « Arrêter le tapis » reste toujours visible. Un changement fait sur la console est suivi par l’app.
-- **Vélo libre** : en mode Puissance (ERG), cinq boutons calés sur ta FTP (Récup, Endurance, Tempo, Seuil, PMA) et des réglages fins de ±5 / ±10 W. En mode Pente, le KICKR simule une pente de 0 à 8 % (réglages de ±0,5 / ±1 %) et tu gères l’effort avec tes vitesses. Avec les pédales Assioma, KICKR et pédales s’affichent côte à côte.
+- **Vélo libre** : les tuiles KICKR et pédales sont toujours affichées ; si les pédales ne sont pas connectées, le bouton « Connecter les pédales » de leur tuile les ajoute en pleine séance. En mode Puissance (ERG), cinq boutons calés sur ta FTP (Récup, Endurance, Tempo, Seuil, PMA) et des réglages fins de ±5 / ±10 W. En mode Pente, le KICKR simule une pente de 0 à 8 % (réglages de ±0,5 / ±1 %) et tu gères l’effort avec tes vitesses. Avec les pédales Assioma, KICKR et pédales s’affichent côte à côte.
 - **Affichage** : vitesse ou puissance en grand avec la consigne, puis temps, distance, allure (actuelle et moyenne) ou cadence, FC, calories ou kJ, moyenne et graphique de la séance.
 - **Tours** : chaque bouton de préréglage ouvre un nouveau tour ; le bouton « Tour » en ajoute un quand tu veux. Ils apparaissent comme intervalles dans la fiche de l’activité.
 - **Terminer** enregistre la séance dans le Journal (avec export Strava et Garmin, comme les autres).
@@ -46,7 +46,7 @@ Pour faire ta propre séance en pilotant la machine depuis le téléphone, sans 
 - **Connexion** : Accueil → Home trainer → Pédales Assioma Duo → Connecter, puis choisis l’appareil dont le nom commence par ASSIOMA. Le KICKR apparaît aussi dans la liste, car il mesure lui aussi la puissance : ne le choisis pas.
 - **Avant de connecter** : fais tourner les manivelles pour réveiller les pédales et ferme l’app Favero Assioma. En Bluetooth, les pédales ne se connectent qu’à un seul appareil à la fois. Ta Forerunner peut rester appairée en ANT+, ça ne gêne pas.
 - **Réglage Favero** : laisse la transmission Bluetooth sur un seul canal, pas « Dual channel L/R ». Sinon l’app ne reçoit que la moitié de la puissance (elle te prévient si elle le détecte).
-- **Pendant la séance** : le grand chiffre est la puissance de référence (les pédales par défaut). En dessous, deux tuiles montrent côte à côte le KICKR (puissance, cadence, résistance réglée) et les pédales (puissance, cadence, équilibre gauche/droite). La tuile encadrée est la référence.
+- **Pendant la séance** : dès que tu as connecté tes pédales une fois, les tuiles KICKR et pédales s’affichent à chaque séance, avec « Connecter les pédales » si elles ne le sont pas encore. Le grand chiffre est la puissance de référence (les pédales par défaut). En dessous, deux tuiles montrent côte à côte le KICKR (puissance, cadence, résistance réglée) et les pédales (puissance, cadence, équilibre gauche/droite). La tuile encadrée est la référence.
 - **ERG calé sur les pédales** : les pédales lisent souvent quelques watts de plus que le KICKR. L’app apprend cet écart et règle la résistance du KICKR pour que les pédales affichent exactement la cible. Tu peux le désactiver, ou choisir le KICKR comme référence, dans Réglages des pédales.
 - **Cadence du KICKR** : le KICKR n’a pas de capteur de cadence, il l’estime d’après les à-coups du pédalage (« rpm est. »). En récupération ou avec un petit braquet, il affiche souvent la moitié de la vraie cadence : sa tuile l’indique alors (« cadence ≈ ½ »). L’app utilise toujours la cadence des pédales quand elles sont connectées (affichage, consignes, fichier envoyé à Strava et Garmin).
 - **Si les pédales décrochent** : le KICKR prend le relais automatiquement et la séance continue.
@@ -63,6 +63,17 @@ Pour faire ta propre séance en pilotant la machine depuis le téléphone, sans 
 - **Sécurité** : STOP ou clé retirée mettent la séance en pause. La vitesse maximale autorisée se règle dans Réglages du tapis (14 km/h par défaut, le maximum du Run 100) : une consigne plus rapide est plafonnée.
 - **Si le tapis est en lecture seule** : l’app suit et enregistre la séance, et annonce à la voix la vitesse à régler sur la console.
 - **Après la séance** : l’activité « course sur tapis » apparaît dans le Journal avec les allures visées et réalisées pour chaque intervalle, la FC et la distance. Elle s’envoie sur Strava comme une course en intérieur et sur Garmin Connect en fichier .FIT. Si tu enregistres aussi la séance avec ta Forerunner, n’envoie qu’une des deux sur Strava pour éviter le doublon.
+
+## Programmes du tapis (Calories, Fractionné, Endurance)
+
+Les 30 programmes intégrés du Run 100 (manuel, pages 9 à 11) sont dans **Séances → Course → Tapis de course** (raccourci « Programmes du tapis » sur l’accueil et dans la fiche du tapis). Dans « Toutes », une seule carte y mène, pour ne pas noyer les autres séances.
+
+- **Calories 1 à 10** (15 à 60 min, jusqu’à 11 km/h) : variations d’allure modérées.
+- **Fractionné 1 à 10** (« Interval training », 30 à 80 min, jusqu’à 13,2 km/h) : accélérations d’une minute entre des récupérations.
+- **Endurance 1 à 10** (20 à 80 min, jusqu’à 9 km/h) : longs paliers stables avec une ou deux relances.
+- **Sur le tapis**, l’app règle la vitesse minute par minute comme la console, mais avec en plus la forme du jour (–10 %, –5 %…), la reprise en main à la console, les annonces vocales et l’enregistrement complet (intervalles, FC, Strava, .FIT). Ils s’envoient aussi à la Forerunner, avec une fenêtre d’allure de ±0,2 km/h autour de chaque palier.
+- **Durée fixe** : ce sont les programmes du fabricant, on ne les raccourcit pas. Choisis un autre numéro de la même famille.
+- **Précision** : les profils ont été relevés sur les graphiques du manuel (paliers d’une minute, à ±0,3 km/h près). Les vitesses max de la famille Endurance correspondent au tableau du manuel, sauf Endurance 2, lue à 7,8 km/h sur le graphique contre 8,4 dans le tableau.
 
 ## 1. Mise en ligne (une seule fois)
 
@@ -117,7 +128,7 @@ Crée une clé sur [console.anthropic.com](https://console.anthropic.com/setting
 ## 7. Écrire tes séances
 
 - **Vélo** (% de FTP) : `10m@45-70 "Échauffement", 4x(8m@95, 4m@55), 6m@60-40`. Options : `c90` pour la cadence, `free` pour le mode libre ; `m` veut dire minutes.
-- **Course** : `15min@E, 6x(800m@I, 2min@trot), 10min@E`. Cibles : `trot`, `E`, `M`, `T`, `I`, `R`, `z1` à `z5` (FC), ou une allure `4:30` ; `m` veut dire mètres et `min` minutes.
+- **Course** : `15min@E, 6x(800m@I, 2min@trot), 10min@E`. Cibles : `trot`, `E`, `M`, `T`, `I`, `R`, `z1` à `z5` (FC), une allure `4:30`, ou une vitesse `10.5kmh` (avec un point, pas une virgule) ; `m` veut dire mètres et `min` minutes.
 - **Natation** : `400m@souple, 8x(100m@css r15s), 200m@souple`. Cibles : `educ`, `souple`, `end`, `tempo`, `css`, `css+3`, `vite`, `sprint`. `r15s` = 15 s de repos après chaque répétition.
 
 ## 8. À savoir
