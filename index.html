@@ -243,6 +243,8 @@ table.srccmp td:first-child { color: var(--muted); }
 .forme > button { height: 44px; border-radius: 10px; background: var(--surface); color: var(--text); font-size: 24px; font-weight: 600; border: 0; }
 .forme .fv { text-align: center; line-height: 1.15; }
 .forme .fv b { font-family: var(--chrono); font-style: italic; font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; }
+.forme .fv-in { font-family: var(--chrono); font-style: italic; font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; color: var(--text); background: transparent; border: 0; border-bottom: 1.5px dashed rgba(238, 243, 250, .35); border-radius: 0; padding: 0 2px; margin: 0; text-align: center; min-width: 2.6ch; max-width: 6ch; min-height: 0; height: auto; line-height: 1.15; }
+.forme .fv-in:focus { outline: none; border-bottom-color: var(--accent, #ffcb2f); background: rgba(255, 203, 47, .08); }
 .forme .fv span { display: block; font-size: 12px; color: var(--muted); }
 .startcover .forme { text-align: left; }
 #player.tread .startcover { background: rgba(13,27,46,.97); }
@@ -2155,7 +2157,7 @@ table.srccmp .sw { display: inline-block; width: 8px; height: 8px; border-radius
       this.emit('structure');
     }
 
-    setIntensity(v) { this.intensity = Math.max(0.5, Math.min(1.5, Math.round(v * 1000) / 1000)); this._apply(true); this.emit('intensity', this.intensity); }
+    setIntensity(v) { if (!(v > 0)) return; this.intensity = Math.max(0.05, Math.min(5, Math.round(v * 1000) / 1000)); this._apply(true); this.emit('intensity', this.intensity); }
     // séance libre : consigne de puissance choisie à la main, tours à la demande
     setManual(w) { this.manualW = Math.max(0, Math.min(2000, Math.round(w))); if (!this.ergOn) { this.ergOn = true; this.emit('erg', true); } this._apply(true); this.emit('manual', this.manualW); }
     lap(label, target) {
@@ -3923,7 +3925,8 @@ Analyse la séance : qualité d’exécution, dérive cardiaque éventuelle, sig
       this._resumeWanted = true;
     }
     skip() { if (this.state === 'running' || this.state === 'paused') this._advance(); }
-    setIntensity(v) { this.intensity = clamp(Math.round(v * 1000) / 1000, 0.7, 1.2); this._send(true); this.emit('intensity', this.intensity); }
+    // pas de borne « sportive » : seulement des garde-fous techniques (les consignes restent plafonnées par la vitesse max du tapis)
+    setIntensity(v) { if (!(v > 0)) return; this.intensity = clamp(Math.round(v * 1000) / 1000, 0.05, 5); this._send(true); this.emit('intensity', this.intensity); }
     stop() { clearInterval(this._timer); this._closeLap(); this.state = 'done'; if (this._offStatus) this._offStatus(); }
     // ---- consignes de vitesse
     _send(force) {
@@ -5540,10 +5543,12 @@ Il faut exactement ${nWeeks} semaines.`,
   const localDay = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   function formeGet(sport) { const f = LS.get('forme', null); return f && f.date === localDay() && f[sport] ? f[sport] : 1; }
   function formeSet(sport, v) { const f = LS.get('forme', null), d = localDay(); const o = f && f.date === d ? f : { date: d }; o[sport] = Math.round(v * 1000) / 1000; LS.set('forme', o); }
-  const clampInt = v => Math.max(0.7, Math.min(1.2, Math.round(v * 1000) / 1000));
+  // garde-fous techniques seulement : la forme du jour se règle librement
+  const clampInt = v => Math.max(0.05, Math.min(5, Math.round(v * 1000) / 1000));
+  const numIn = v => parseFloat(String(v).replace(',', '.').replace(/[^0-9.]/g, ''));
   // réglage « valeur max » + raccourcis en % ; k = préfixe des actions (data-k ou data-t)
   function formeHTML(attr, value, unit, pct, note) {
-    return `<div class="forme"><button ${attr}="fmax-" aria-label="Moins">−</button><div class="fv"><b>${value}</b> ${unit}<span>${pct === 1 ? 'comme prévu' : r0(pct * 100) + ' % de la séance prévue'}${note ? ' · ' + note : ''}</span></div><button ${attr}="fmax+" aria-label="Plus">+</button></div>
+    return `<div class="forme"><button ${attr}="fmax-" aria-label="Moins">−</button><div class="fv"><input class="fv-in" ${attr}="fval" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" value="${value}" aria-label="Valeur de l’effort le plus dur, en ${unit}" style="width:${Math.max(2, String(value).length) + 0.6}ch"> ${unit}<span>${pct === 1 ? 'comme prévu' : r0(pct * 100) + ' % de la séance prévue'}${note ? ' · ' + note : ''}</span></div><button ${attr}="fmax+" aria-label="Plus">+</button></div>
       <div class="chips" style="margin-top:8px">${[[0.9, 'Fatigué −10 %'], [0.95, '−5 %'], [1, 'Normal'], [1.03, '+3 %'], [1.05, 'En forme +5 %']].map(([v, l]) => `<button class="chip ${Math.abs(v - pct) < 0.0005 ? 'on' : ''}" ${attr}="fpct" data-v="${v}">${l}</button>`).join('')}</div>`;
   }
   // puissance de l'effort le plus dur (W) : étapes de 30 s et plus, hors portions libres
@@ -5579,7 +5584,7 @@ Il faut exactement ${nWeeks} semaines.`,
         <div class="statline" style="margin-bottom:6px"><div class="stat"><b>${W.fmtDur(st.duration, true)}</b><span>durée</span></div><div class="stat"><b>${r0(st.tss * intensity * intensity)}</b><span>TSS</span></div><div class="stat"><b>${fx(st.IF * intensity, 2)}</b><span>IF</span></div><div class="stat"><b>${r0(st.kj * intensity)}</b><span>kJ</span></div>${cads.length ? `<div class="stat"><b>${cads.length > 1 ? cads[0] + '–' + cads[cads.length - 1] : cads[0]}</b><span>rpm visés</span></div>` : ''}</div>
         ${durationChips(minutes, W.totalDuration(baseTree()), fixed)}${adaptNotice(r, minutes)}
         ${scaled ? `<div class="switch"><span>Adapter à mon niveau (${W.LEVELS[p.level]})<br><span class="small muted">séance prévue niveau ${w.level}/5</span></span><input type="checkbox" data-k="adapt" ${adapt ? 'checked' : ''}></div>` : ''}
-        ${!fixed && bikeMax(tree, p.ftp) > 0 ? `<div style="margin:14px 0 6px" class="small muted">Forme du jour : puissance de l’effort le plus dur</div>${formeHTML('data-k', r0(bikeMax(tree, p.ftp) * intensity), 'W', intensity, formeGet('bike') !== 1 && Math.abs(formeGet('bike') - intensity) < 0.0005 ? 'réglée aujourd’hui' : '')}` : ''}
+        ${!fixed && bikeMax(tree, p.ftp) > 0 ? `<div style="margin:14px 0 6px" class="small muted">Forme du jour : puissance de l’effort le plus dur <span style="opacity:.75">(touche le chiffre pour le taper)</span></div>${formeHTML('data-k', r0(bikeMax(tree, p.ftp) * intensity), 'W', intensity, formeGet('bike') !== 1 && Math.abs(formeGet('bike') - intensity) < 0.0005 ? 'réglée aujourd’hui' : '')}` : ''}
         <div class="btn-row" style="margin:16px 0"><button class="btn primary" data-k="start">${IC.play} Démarrer</button><button class="btn" data-k="fav" aria-label="Favori">${S.favs.includes(w.id) ? IC.starOn : IC.star}</button><button class="btn" data-k="edit">Modifier</button>${(w.source === 'gen' || w.source === 'ai' || r.changed) && !S.custom.some(c => c.id === w.id) ? '<button class="btn" data-k="save">Enregistrer</button>' : ''}</div>
         <h3 style="margin:6px 0">Déroulé</h3>${stepsHTML(tree, p.ftp, intensity)}
         ${w.source === 'custom' || (w.source === 'ai' && S.custom.some(c => c.id === w.id)) ? '<button class="btn danger block" style="margin-top:14px" data-k="del">Supprimer cette séance</button>' : ''}`;
@@ -5592,6 +5597,7 @@ Il faut exactement ${nWeeks} semaines.`,
       if (k === 'fpct') { intensity = +b.dataset.v; formeSet('bike', intensity); re(); }
       else if (k === 'fmax-' || k === 'fmax+') {
         const mx = bikeMax(cur().tree, p.ftp), now = Math.round(mx * intensity);
+        if (now + (k === 'fmax+' ? 5 : -5) < 10) return;
         intensity = clampInt((now + (k === 'fmax+' ? 5 : -5)) / mx); formeSet('bike', intensity); re();
       }
       else if (k === 'dur') { minutes = +b.dataset.v; re(); }
@@ -5601,7 +5607,15 @@ Il faut exactement ${nWeeks} semaines.`,
       else if (k === 'save') { const r = cur(); saveCustom(Object.assign({}, w, { id: r.changed ? 'custom-' + Date.now() : w.id, tree: r.tree, name: r.name, source: r.changed ? 'gen' : w.source })); toast('Séance enregistrée dans « Mes séances »'); re(); }
       else if (k === 'del') { S.custom = S.custom.filter(c => c.id !== w.id); LS.set('custom', S.custom); closeSheet(); render(); toast('Séance supprimée'); }
     });
-    sh.addEventListener('change', e => { if (e.target.dataset.k === 'adapt') { adapt = e.target.checked; re(); } });
+    sh.addEventListener('change', e => {
+      if (e.target.dataset.k === 'adapt') { adapt = e.target.checked; re(); }
+      if (e.target.dataset.k === 'fval') { // puissance tapée directement
+        const v = numIn(e.target.value), mx = bikeMax(cur().tree, p.ftp);
+        if (v >= 10 && mx > 0) { intensity = clampInt(v / mx); formeSet('bike', intensity); }
+        re();
+      }
+    });
+    sh.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.k === 'fval') e.target.blur(); });
   }
 
   // séance surprise vélo, avec le type d'effort et le temps disponible
@@ -5858,8 +5872,8 @@ Il faut exactement ${nWeeks} semaines.`,
     const cap = run.maxSpeed;
     const formeBox = () => {
       const pm = run.planMax(), top = Math.round(pm * run.intensity * 10) / 10;
-      return `<div class="small muted" style="margin:4px 0 6px">Forme du jour : vitesse de l’effort le plus rapide</div>${formeHTML('data-t', kmh(top), 'km/h', run.intensity, '')}
-        ${top > cap + 0.05 ? `<p class="small" style="margin:8px auto 0;max-width:320px;color:var(--warn, #f2a93b)">La séance monte à ${kmh(top)} km/h, au-dessus de ta limite de ${kmh(cap)} km/h : seuls les passages les plus rapides seraient plafonnés. <button class="linkbtn" data-t="fcap">Tout réduire en proportion (${kmh(cap)} km/h max)</button></p>` : ''}
+      return `<div class="small muted" style="margin:4px 0 6px">Forme du jour : vitesse de l’effort le plus rapide <span style="opacity:.75">(touche le chiffre pour le taper)</span></div>${formeHTML('data-t', kmh(top), 'km/h', run.intensity, '')}
+        ${top > cap + 0.05 ? `<p class="small" style="margin:8px auto 0;max-width:320px;color:var(--warn, #f2a93b)">La séance monte à ${kmh(top)} km/h, au-dessus de ta limite de ${kmh(cap)} km/h : seuls les passages les plus rapides seraient plafonnés (limite réglable dans la fiche du tapis). <button class="linkbtn" data-t="fcap">Tout réduire en proportion (${kmh(cap)} km/h max)</button></p>` : ''}
         <p class="small muted" style="margin:8px 0 0">Première consigne : ${kmh(run.targetSpeed(run.steps[0]))} km/h.</p>`;
     };
     const first = run.targetSpeed(run.steps[0]);
@@ -5935,14 +5949,23 @@ Il faut exactement ${nWeeks} semaines.`,
     run.on('done', () => { say('Séance terminée. Bravo ! Ralentis et arrête le tapis quand tu veux.'); finishTread(run, cleanup); });
     function cleanup() { run.stop(); keepAwake(false); el.remove(); document.body.style.overflow = ''; S.treadRun = null; Hist.pop(1); }
 
+    // vitesse max tapée directement (« 12 », « 12,5 »)
+    el.addEventListener('change', e => {
+      if (e.target.dataset.t !== 'fval') return;
+      const v = numIn(e.target.value), pm = run.planMax();
+      if (v >= run.minSpeed && pm > 0) { run.setIntensity(v / pm); formeSet('run', run.intensity); }
+      $('#t-forme').innerHTML = formeBox();
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.t === 'fval') e.target.blur(); });
     el.addEventListener('click', async e => {
       const b = e.target.closest('[data-t]'); if (!b) return;
       const k = b.dataset.t;
+      if (k === 'fval') return;
       if (k === 'fpct' || k === 'fmax-' || k === 'fmax+' || k === 'fcap') {
         const pm = run.planMax();
         if (k === 'fpct') run.setIntensity(+b.dataset.v);
         else if (k === 'fcap') run.setIntensity(cap / pm);
-        else run.setIntensity((Math.round(pm * run.intensity * 10) / 10 + (k === 'fmax+' ? 0.1 : -0.1)) / pm);
+        else { const nv = Math.round(pm * run.intensity * 10) / 10 + (k === 'fmax+' ? 0.1 : -0.1); if (nv >= run.minSpeed - 0.001) run.setIntensity(nv / pm); }
         formeSet('run', run.intensity);
         $('#t-forme').innerHTML = formeBox();
         return;
@@ -5961,7 +5984,7 @@ Il faut exactement ${nWeeks} semaines.`,
       else if (k === 'cancel') { cleanup(); }
       else if (k === 'pause') { run.state === 'paused' ? run.resume() : run.pause(); update(); }
       else if (k === 'skip') run.skip();
-      else if (k === 'plus' || k === 'minus') { run.setIntensity(run.intensity + (k === 'plus' ? 0.02 : -0.02)); update(); }
+      else if (k === 'plus' || k === 'minus') { const nv = run.intensity + (k === 'plus' ? 0.02 : -0.02); if (nv > 0.04) run.setIntensity(nv); update(); }
       else if (k === 'end' || k === 'close') {
         const v = await ask('Terminer la séance ?', 'Le tapis continue de tourner : arrête-le avec STOP.', [{ label: 'Enregistrer et terminer', value: 'save', cls: 'primary' }, { label: 'Continuer', value: null }, { label: 'Abandonner sans enregistrer', value: 'drop' }]);
         if (v === 'save') finishTread(run, cleanup);

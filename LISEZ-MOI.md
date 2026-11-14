@@ -38,6 +38,7 @@ Pour faire ta propre séance en pilotant la machine depuis le téléphone, sans 
 
 - **Vélo** : dans la fiche d’une séance, « Forme du jour » affiche la puissance de l’effort le plus dur. Baisse-la ou monte-la par pas de 5 W, ou choisis un raccourci (Fatigué −10 %, −5 %, Normal, +3 %, En forme +5 %) : toutes les consignes de la séance changent dans la même proportion.
 - **Tapis** : même principe sur l’écran de départ « Sur le tapis », avec la vitesse de l’effort le plus rapide, par pas de 0,1 km/h. Si la séance dépasse ta vitesse maximale autorisée, l’app te propose de tout réduire en proportion plutôt que de seulement plafonner les passages rapides.
+- **Sans limite** : touche la valeur (watts ou km/h) pour taper directement celle que tu veux, par exemple 12 km/h sur un programme prévu à 8 km/h. Seules restent les limites physiques : sur le tapis, aucune consigne ne dépasse ta vitesse maximale autorisée ni ne descend sous la vitesse mini du tapis.
 - Le réglage est retenu pour la journée, séparément pour le vélo et la course : les autres séances du jour partent avec la même forme. Les tests (FTP, seuil) ne sont jamais modifiés.
 - En cours de séance, les boutons – / + du lecteur ajustent encore de 2 % en 2 %. La fiche de l’activité rappelle le pourcentage utilisé.
 
